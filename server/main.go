@@ -42,6 +42,7 @@ type User struct {
 	Country     string `json:"country"`
 	Skills      string `json:"skills"`
 	Interests   string `json:"interests"`
+	IsAdmin     bool   `json:"is_admin"`
 }
 
 type Internship struct {
@@ -167,6 +168,7 @@ func main() {
 	api.Get("/export/:kind.:format", exportDocument)
 	api.Get("/preview/:kind", previewDocument)
 	api.Get("/ai/status", aiStatus)
+	api.Get("/admin/users", adminUsers)
 	api.Post("/ai/polish", aiPolish)
 	api.Post("/ai/report", aiReport)
 	api.Post("/ai/weekly", aiWeekly)
@@ -251,6 +253,9 @@ func migrate() error {
 	if err != nil {
 		return err
 	}
+	if err = migrateAdmin(); err != nil {
+		return err
+	}
 	_, err = db.Exec(`UPDATE internships SET university='มหาวิทยาลัยราชภัฏนครปฐม', year='2569', term='2' WHERE university!='มหาวิทยาลัยราชภัฏนครปฐม' OR year!='2569' OR term!='2'`)
 	if err != nil {
 		return err
@@ -279,6 +284,7 @@ func requestUser(c *fiber.Ctx) (User, error) {
 	err := db.QueryRow(`SELECT u.id,u.email,u.role,u.name,u.phone,u.position,u.birth_date,u.home_address,u.subdistrict,u.district,u.province,u.country,u.skills,u.interests FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>?`, hashToken(t), time.Now().UTC().Format(time.RFC3339)).Scan(&u.ID, &u.Email, &u.Role, &u.Name, &u.Phone, &u.Position, &u.BirthDate, &u.HomeAddress, &u.Subdistrict, &u.District, &u.Province, &u.Country, &u.Skills, &u.Interests)
 	if err == nil {
 		u.PhotoURL = fmt.Sprintf("/api/profile/photo/%d", u.ID)
+		u.IsAdmin = isAdminEmail(u.Email)
 	}
 	return u, err
 }
@@ -301,6 +307,7 @@ func setSession(c *fiber.Ctx, id int64) error {
 		return e
 	}
 	c.Cookie(&fiber.Cookie{Name: "session", Value: t, HTTPOnly: true, SameSite: "Strict", Secure: os.Getenv("APP_SECURE_COOKIE") == "1", Expires: expires, Path: "/"})
+	markLogin(id)
 	return nil
 }
 func register(c *fiber.Ctx) error {

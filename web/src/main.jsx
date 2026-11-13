@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Toaster, toast } from 'react-hot-toast'
-import { LayoutDashboard, UserRound, CalendarDays, BadgeCheck, ClipboardCheck, BookOpenText, Files, LogOut, ChevronRight, Plus, ArrowUpRight, Download, Clock3, CheckCircle2, FileText, FileUp, ImagePlus, Copy, ListChecks, Building2, Eye, X, CircleHelp, Sparkles, BellRing, TriangleAlert, ChevronLeft } from 'lucide-react'
+import { LayoutDashboard, UserRound, CalendarDays, BadgeCheck, ClipboardCheck, BookOpenText, Files, LogOut, ChevronRight, Plus, ArrowUpRight, Download, Clock3, CheckCircle2, FileText, FileUp, ImagePlus, Copy, ListChecks, Building2, Eye, X, CircleHelp, Sparkles, BellRing, TriangleAlert, ChevronLeft, Users, Search, RefreshCw } from 'lucide-react'
 import { calculatePlan, missingLogDates } from './plan.js'
 import { provinces } from './provinces.js'
 import { validateProfile, validateInternship, validateLog, validateApproval } from './validation.js'
@@ -295,10 +295,11 @@ function App() {
     ['report', 'รายงาน', BookOpenText],
     ['documents', 'เอกสาร', Files],
   ].filter(([key]) => student ? key !== 'evaluation' : key !== 'report' && key !== 'documents')
+  if (data.user.is_admin) tabs.push(['admin', 'ผู้ใช้งานระบบ', Users])
   const headings = Object.fromEntries(tabs.map(([key, label]) => [key, label]))
   const groupKeys = student
-    ? [['ภาพรวม', ['overview']], ['การฝึกงาน', ['profile', 'logs', 'approvals']], ['รายงานและเอกสาร', ['report', 'documents']]]
-    : [['ภาพรวม', ['overview']], ['นักศึกษาที่ดูแล', ['logs', 'approvals', 'evaluation']], ['บัญชี', ['profile']]]
+    ? [['ภาพรวม', ['overview']], ['การฝึกงาน', ['profile', 'logs', 'approvals']], ['รายงานและเอกสาร', ['report', 'documents']], ['ผู้ดูแลระบบ', ['admin']]]
+    : [['ภาพรวม', ['overview']], ['นักศึกษาที่ดูแล', ['logs', 'approvals', 'evaluation']], ['บัญชี', ['profile']], ['ผู้ดูแลระบบ', ['admin']]]
   const navGroups = groupKeys.map(([title, keys]) => [title, tabs.filter(([key]) => keys.includes(key))]).filter(([, items]) => items.length)
   return <div className="app-shell">
     <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
@@ -312,7 +313,7 @@ function App() {
         <div className="topbar-title"><nav className="breadcrumb" aria-label="เส้นทางการนำทาง"><button onClick={() => setTab('overview')}>สมุดฝึกงาน</button><ChevronRight size={13} aria-hidden="true" /><span aria-current="page">{headings[tab]}</span></nav><h1>{headings[tab]}</h1></div>
         <div className="topbar-right">{student && <button type="button" data-tour="tour-button" className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-blue-900 hover:bg-slate-50" onClick={() => setTouring(true)}><CircleHelp size={15} aria-hidden="true" />คู่มือ</button>}<span className="pill"><Building2 size={14} aria-hidden="true" />{data.internship?.company || 'ยังไม่ระบุบริษัท'}</span><div className="avatar small" title={data.user.name}>{data.user.name?.slice(0, 1) || '?'}</div></div>
       </header>
-      <main className="content">{tab === 'overview' && <Overview data={data} student={student} go={setTab} startLog={startLog} notify={notify} toggleNotify={toggleNotify} />}{tab === 'profile' && <Profile data={data} student={student} action={action} refresh={load} />}{tab === 'logs' && <Logs data={data} student={student} action={action} ai={ai} initialDate={logDate} onDateUsed={() => setLogDate('')} />}{tab === 'approvals' && <Approvals data={data} student={student} action={action} />}{tab === 'evaluation' && !student && <Evaluation data={data} student={student} action={action} />}{tab === 'report' && student && <Report data={data} student={student} action={action} ai={ai} />}{tab === 'documents' && student && <Documents data={data} student={student} go={setTab} />}</main>
+      <main className="content">{tab === 'overview' && <Overview data={data} student={student} go={setTab} startLog={startLog} notify={notify} toggleNotify={toggleNotify} />}{tab === 'profile' && <Profile data={data} student={student} action={action} refresh={load} />}{tab === 'logs' && <Logs data={data} student={student} action={action} ai={ai} initialDate={logDate} onDateUsed={() => setLogDate('')} />}{tab === 'approvals' && <Approvals data={data} student={student} action={action} />}{tab === 'evaluation' && !student && <Evaluation data={data} student={student} action={action} />}{tab === 'report' && student && <Report data={data} student={student} action={action} ai={ai} />}{tab === 'documents' && student && <Documents data={data} student={student} go={setTab} />}{tab === 'admin' && data.user.is_admin && <AdminUsers me={data.user} />}</main>
     </div>
     {touring && student && <Tour steps={studentTour} go={setTab} onClose={closeTour} />}
   </div>
@@ -677,6 +678,69 @@ function WeeklySummary() {
     </div>
     {text && <div className="mt-2"><textarea className="w-full rounded-md border border-violet-200 bg-violet-50/40 p-3 text-sm leading-relaxed" value={text} onChange={e => setText(e.target.value)} rows={Math.min(18, text.split('\n').length + 2)} aria-label="สรุปรายสัปดาห์" /><div className="mt-2 flex gap-2"><button type="button" className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold" onClick={copy}><Copy size={13} aria-hidden="true" />คัดลอก</button><button type="button" className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600" onClick={() => setText('')}>ล้าง</button></div></div>}
   </section>
+}
+
+const thaiDateTime = iso => iso ? new Intl.DateTimeFormat('th-TH', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Bangkok' }).format(new Date(iso)) : '—'
+function timeAgo(iso) {
+  if (!iso) return 'ยังไม่มีข้อมูล'
+  const minutes = Math.floor((Date.now() - new Date(iso).getTime()) / 60000)
+  if (minutes < 1) return 'เมื่อสักครู่'
+  if (minutes < 60) return `${minutes} นาทีที่แล้ว`
+  if (minutes < 60 * 24) return `${Math.floor(minutes / 60)} ชม.ที่แล้ว`
+  const days = Math.floor(minutes / 1440)
+  return days < 30 ? `${days} วันที่แล้ว` : thaiDateTime(iso)
+}
+
+function AdminUsers({ me }) {
+  const [rows, setRows] = useState(null)
+  const [error, setError] = useState('')
+  const [query, setQuery] = useState('')
+  const [role, setRole] = useState('all')
+  const [loading, setLoading] = useState(false)
+  async function load() {
+    setLoading(true)
+    try { const v = await request('/admin/users'); setRows(v.users); setError('') }
+    catch (e) { setError(e.message) }
+    finally { setLoading(false) }
+  }
+  useEffect(() => { load() }, [])
+  if (error) return <section className="card"><p className="error">{error}</p></section>
+  if (!rows) return <section className="card"><p className="muted">กำลังโหลดรายชื่อผู้ใช้…</p></section>
+  const weekAgo = Date.now() - 7 * 24 * 3600 * 1000
+  const stats = [
+    ['ผู้ใช้ทั้งหมด', rows.length, 'บัญชี'],
+    ['นักศึกษา', rows.filter(r => r.role === 'student').length, 'คน'],
+    ['พี่เลี้ยง', rows.filter(r => r.role === 'mentor').length, 'คน'],
+    ['เข้าใช้ใน 7 วัน', rows.filter(r => r.last_login_at && new Date(r.last_login_at).getTime() >= weekAgo).length, 'คน'],
+  ]
+  const q = query.trim().toLowerCase()
+  const shown = rows.filter(r => (role === 'all' || r.role === role) && (!q || [r.name, r.email, r.company, r.mentor_name, r.student_name].some(v => (v || '').toLowerCase().includes(q))))
+  return <div className="stack">
+    <section className="summary-band" aria-label="สรุปผู้ใช้งาน">{stats.map(([label, value, unit]) => <div key={label}><Users size={18} className="summary-icon" aria-hidden="true" /><span>{label}</span><strong>{value}</strong><small>{unit}</small></div>)}</section>
+    <section className="card">
+      <div className="section-head"><div><p className="eyebrow">ผู้ดูแลระบบ</p><h2>ผู้ใช้งานทั้งหมด</h2></div><button type="button" className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50" onClick={load} disabled={loading}><RefreshCw size={13} aria-hidden="true" />{loading ? 'กำลังโหลด…' : 'รีเฟรช'}</button></div>
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <label className="relative min-w-[220px] flex-1"><Search size={15} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-slate-400" aria-hidden="true" /><input className="w-full rounded-lg border border-slate-300 py-2 pr-3 pl-9 text-sm" placeholder="ค้นหาชื่อ อีเมล หรือบริษัท" value={query} onChange={e => setQuery(e.target.value)} aria-label="ค้นหาผู้ใช้" /></label>
+        <div className="segmented">{[['all', 'ทั้งหมด'], ['student', 'นักศึกษา'], ['mentor', 'พี่เลี้ยง']].map(([key, label]) => <button key={key} type="button" className={role === key ? 'selected' : ''} onClick={() => setRole(key)}>{label}</button>)}</div>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[860px] text-left text-sm">
+          <thead><tr className="border-b border-slate-200 text-[11px] font-semibold tracking-wider text-slate-500 uppercase"><th className="py-2 pr-3">ผู้ใช้</th><th className="py-2 pr-3">บทบาท</th><th className="py-2 pr-3">บริษัท / การเชื่อมโยง</th><th className="py-2 pr-3 text-right">บันทึก</th><th className="py-2 pr-3">บันทึกล่าสุด</th><th className="py-2 pr-3">สมัครเมื่อ</th><th className="py-2">เข้าใช้ล่าสุด</th></tr></thead>
+          <tbody>{shown.map(r => <tr key={r.id} className="border-b border-slate-100 align-top">
+            <td className="py-3 pr-3"><div className="font-semibold text-slate-900">{r.name || '—'}{r.id === me.id && <span className="ml-1.5 text-[11px] font-normal text-slate-400">(คุณ)</span>}</div><div className="text-xs text-slate-500">{r.email}</div></td>
+            <td className="py-3 pr-3"><span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${r.role === 'student' ? 'bg-blue-50 text-blue-800' : 'bg-emerald-50 text-emerald-800'}`}>{r.role === 'student' ? 'นักศึกษา' : 'พี่เลี้ยง'}</span>{r.is_admin && <span className="ml-1 rounded-full bg-slate-800 px-2 py-0.5 text-[11px] font-semibold text-white">admin</span>}</td>
+            <td className="py-3 pr-3 text-xs text-slate-600"><div className="font-medium text-slate-800">{r.company || '—'}</div>{r.role === 'student' ? <div>พี่เลี้ยง: {r.mentor_name || 'ยังไม่เชื่อม'}</div> : <div>ดูแล {r.mentees} คน{r.student_name ? ` · ${r.student_name}` : ''}</div>}</td>
+            <td className="py-3 pr-3 text-right">{r.role === 'student' ? <><div className="font-semibold">{r.log_count}</div><div className="text-[11px] text-slate-500">รับรอง {r.approved}</div></> : '—'}</td>
+            <td className="py-3 pr-3 text-xs">{r.last_log_date ? thaiShortDate(r.last_log_date) : '—'}</td>
+            <td className="py-3 pr-3 text-xs text-slate-600">{thaiDateTime(r.created_at)}</td>
+            <td className="py-3 text-xs"><div className="flex items-center gap-1.5">{r.active_session && <span className="h-2 w-2 rounded-full bg-emerald-500" title="มี session ที่ยังไม่หมดอายุ" />}<span title={thaiDateTime(r.last_login_at)}>{timeAgo(r.last_login_at)}</span></div></td>
+          </tr>)}</tbody>
+        </table>
+        {!shown.length && <p className="empty py-6 text-center">ไม่พบผู้ใช้ที่ตรงกับเงื่อนไข</p>}
+      </div>
+      <p className="mt-4 text-[11px] text-slate-400">แสดงเฉพาะข้อมูลสรุปการใช้งาน ไม่แสดงรหัสผ่านหรือเนื้อหาบันทึก · วันสมัคร/เข้าใช้ล่าสุดเริ่มเก็บตั้งแต่อัปเดตนี้ บัญชีเก่าจะขึ้นเมื่อ login ครั้งถัดไป</p>
+    </section>
+  </div>
 }
 
 function Approvals({ data, student, action }) {

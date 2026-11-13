@@ -19,6 +19,7 @@ Run the Go server behind an HTTPS reverse proxy. The same server serves the fron
 | `DATABASE_URL` | `postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres` | **Required.** PostgreSQL connection string (Supabase: Connect → Session pooler). Tables are created on startup |
 | `WEB_DIST` | `/app/web/dist` | Absolute path to the built frontend |
 | `APP_ORIGINS` | `https://interndaily.vercel.app` | Optional. Extra allowed origins (comma-separated) when a separate frontend, e.g. Vercel, proxies `/api` to this server |
+| `ADMIN_EMAILS` | `you@example.com` | Optional. Comma-separated emails that get the admin page (ผู้ใช้งานระบบ): list of users, roles, log counts, sign-up and last sign-in. Admin rights come only from this env, never from the database |
 | `APP_SECURE_COOKIE` | `1` | Send login cookies only over HTTPS; use `0` for local HTTP |
 | `PDF_BROWSER` | `/usr/bin/chromium` | Actual installed Chrome/Chromium executable for PDF generation |
 | `AI_PROVIDER` | `typhoon` | Optional. `typhoon` (or `openai`) for an OpenAI-compatible API; empty/`ollama` for Ollama |
