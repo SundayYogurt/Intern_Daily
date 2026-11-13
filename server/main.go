@@ -43,6 +43,7 @@ type User struct {
 	Skills      string `json:"skills"`
 	Interests   string `json:"interests"`
 	IsAdmin     bool   `json:"is_admin"`
+	HasPhoto    bool   `json:"has_photo"`
 }
 
 type Internship struct {
@@ -169,6 +170,8 @@ func main() {
 	api.Get("/preview/:kind", previewDocument)
 	api.Get("/ai/status", aiStatus)
 	api.Get("/admin/users", adminUsers)
+	api.Post("/admin/users/:id/reset-password", adminResetPassword)
+	api.Put("/profile/password", changePassword)
 	api.Post("/ai/polish", aiPolish)
 	api.Post("/ai/report", aiReport)
 	api.Post("/ai/weekly", aiWeekly)
@@ -281,7 +284,7 @@ func requestUser(c *fiber.Ctx) (User, error) {
 	if t == "" {
 		return u, errors.New("not logged in")
 	}
-	err := db.QueryRow(`SELECT u.id,u.email,u.role,u.name,u.phone,u.position,u.birth_date,u.home_address,u.subdistrict,u.district,u.province,u.country,u.skills,u.interests FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>?`, hashToken(t), time.Now().UTC().Format(time.RFC3339)).Scan(&u.ID, &u.Email, &u.Role, &u.Name, &u.Phone, &u.Position, &u.BirthDate, &u.HomeAddress, &u.Subdistrict, &u.District, &u.Province, &u.Country, &u.Skills, &u.Interests)
+	err := db.QueryRow(`SELECT u.id,u.email,u.role,u.name,u.phone,u.position,u.birth_date,u.home_address,u.subdistrict,u.district,u.province,u.country,u.skills,u.interests,(u.photo IS NOT NULL AND length(u.photo)>0) FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>?`, hashToken(t), time.Now().UTC().Format(time.RFC3339)).Scan(&u.ID, &u.Email, &u.Role, &u.Name, &u.Phone, &u.Position, &u.BirthDate, &u.HomeAddress, &u.Subdistrict, &u.District, &u.Province, &u.Country, &u.Skills, &u.Interests, &u.HasPhoto)
 	if err == nil {
 		u.PhotoURL = fmt.Sprintf("/api/profile/photo/%d", u.ID)
 		u.IsAdmin = isAdminEmail(u.Email)
@@ -322,8 +325,11 @@ func register(c *fiber.Ctx) error {
 	}
 	in.Email = strings.ToLower(strings.TrimSpace(in.Email))
 	in.Name = strings.TrimSpace(in.Name)
-	if !validEmail(in.Email) || len(in.Password) < 10 || in.Name == "" {
-		return fail(c, 400, "กรอกชื่อ อีเมล และรหัสผ่านอย่างน้อย 10 ตัวอักษร")
+	if !validEmail(in.Email) || in.Name == "" {
+		return fail(c, 400, "กรอกชื่อและอีเมลให้ถูกต้อง")
+	}
+	if msg := validatePassword(in.Password); msg != "" {
+		return fail(c, 400, msg)
 	}
 	role := "student"
 	var internshipID int64
@@ -380,12 +386,21 @@ func login(c *fiber.Ctx) error {
 	if c.BodyParser(&in) != nil {
 		return fail(c, 400, "ข้อมูลไม่ถูกต้อง")
 	}
+	keys := loginKeys(c, in.Email)
+	if wait := lockedFor(keys, time.Now()); wait > 0 {
+		return fail(c, 429, lockMessage(wait))
+	}
 	var id int64
 	var hash string
 	e := db.QueryRow(`SELECT id,password_hash FROM users WHERE email=?`, strings.ToLower(strings.TrimSpace(in.Email))).Scan(&id, &hash)
 	if e != nil || bcrypt.CompareHashAndPassword([]byte(hash), []byte(in.Password)) != nil {
+		recordLoginFailure(keys, time.Now())
+		if wait := lockedFor(keys, time.Now()); wait > 0 {
+			return fail(c, 429, lockMessage(wait))
+		}
 		return fail(c, 401, "อีเมลหรือรหัสผ่านไม่ถูกต้อง")
 	}
+	clearLoginFailures(in.Email)
 	if e = setSession(c, id); e != nil {
 		return fail(c, 500, "เข้าสู่ระบบไม่สำเร็จ")
 	}
@@ -460,7 +475,7 @@ func photo(c *fiber.Ctx) error {
 		return fail(c, 400, "รหัสไม่ถูกต้อง")
 	}
 	u := current(c)
-	if id != u.ID {
+	if id != u.ID && !u.IsAdmin {
 		var n int
 		db.QueryRow(`SELECT COUNT(*) FROM internships WHERE (student_id=? AND mentor_id=?) OR (student_id=? AND mentor_id=?)`, u.ID, id, id, u.ID).Scan(&n)
 		if n == 0 {

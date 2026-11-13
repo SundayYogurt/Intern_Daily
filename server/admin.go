@@ -57,6 +57,7 @@ type adminUserRow struct {
 	Approved    int    `json:"approved"`
 	ActiveNow   bool   `json:"active_session"`
 	IsAdmin     bool   `json:"is_admin"`
+	HasPhoto    bool   `json:"has_photo"`
 }
 
 // GET /api/admin/users — usage overview for admins. No passwords, photos, or log contents.
@@ -74,7 +75,8 @@ func adminUsers(c *fiber.Ctx) error {
 		COALESCE((SELECT COUNT(*) FROM day_logs l WHERE l.internship_id=si.id), 0),
 		COALESCE((SELECT MAX(l.date) FROM day_logs l WHERE l.internship_id=si.id), ''),
 		COALESCE((SELECT COUNT(*) FROM day_logs l WHERE l.internship_id=si.id AND l.approval_id IS NOT NULL), 0),
-		EXISTS (SELECT 1 FROM sessions s WHERE s.user_id=u.id AND s.expires_at>?)
+		EXISTS (SELECT 1 FROM sessions s WHERE s.user_id=u.id AND s.expires_at>?),
+		(u.photo IS NOT NULL AND length(u.photo)>0)
 	FROM users u
 	LEFT JOIN internships si ON si.student_id=u.id
 	LEFT JOIN users sm ON sm.id=si.mentor_id
@@ -88,7 +90,7 @@ func adminUsers(c *fiber.Ctx) error {
 	list := []adminUserRow{}
 	for rows.Next() {
 		var r adminUserRow
-		if err = rows.Scan(&r.ID, &r.Email, &r.Name, &r.Role, &r.CreatedAt, &r.LastLoginAt, &r.Company, &r.MentorName, &r.StudentName, &r.Mentees, &r.LogCount, &r.LastLogDate, &r.Approved, &r.ActiveNow); err != nil {
+		if err = rows.Scan(&r.ID, &r.Email, &r.Name, &r.Role, &r.CreatedAt, &r.LastLoginAt, &r.Company, &r.MentorName, &r.StudentName, &r.Mentees, &r.LogCount, &r.LastLogDate, &r.Approved, &r.ActiveNow, &r.HasPhoto); err != nil {
 			return fail(c, 500, "อ่านข้อมูลผู้ใช้ไม่สำเร็จ")
 		}
 		r.IsAdmin = isAdminEmail(r.Email)
