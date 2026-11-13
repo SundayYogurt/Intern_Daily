@@ -562,6 +562,8 @@ func makeDOCX(blocks []block, d *documentData) ([]byte, error) {
 			document.WriteString(reportLogoDrawing())
 		case "report-info":
 			document.WriteString(reportInfoPara(b.Text))
+		case "report-body":
+			document.WriteString(reportBodyDocx(b.Text))
 		default:
 			document.WriteString(para(b.Text, map[string]string{"title": "Title", "subtitle": "Subtitle", "heading": "Heading1", "subheading": "Heading2", "signature": "Signature", "text": "Normal", "cover-title": "CoverTitle", "cover-label": "CoverLabel", "cover-person": "CoverPerson", "cover-footer": "CoverFooter", "report-center": "ReportCenter", "report-info": "ReportInfo", "toc": "TOC", "toc-sub": "TOCSub", "report-section": "ReportSection", "report-body": "ReportBody"}[b.Kind]))
 		}

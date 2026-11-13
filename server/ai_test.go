@@ -75,3 +75,20 @@ func TestAIEnabledNeedsProviderKey(t *testing.T) {
 		t.Fatal("typhoon provider must not fall back to the Ollama key")
 	}
 }
+
+func TestReportGuideCoversEveryReportSection(t *testing.T) {
+	general, _ := reportGuide("background")
+	if !strings.Contains(general, "บุคคลที่สาม") {
+		t.Fatalf("general guide missing: %q", general)
+	}
+	for _, ch := range reportChapters {
+		for _, f := range ch.Fields {
+			if _, section := reportGuide(f.Key); section == "" {
+				t.Errorf("no writing guide for report key %q (%s)", f.Key, f.Label)
+			}
+		}
+	}
+	if _, section := reportGuide("nope"); section != "" {
+		t.Fatal("unknown key should have no guide")
+	}
+}
