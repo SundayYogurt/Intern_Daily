@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./dark-palette.css";
 
 @theme {
   --font-sans: "Sarabun", Tahoma, sans-serif;
@@ -276,4 +277,55 @@
   .doc-actions { @apply col-start-2 flex-wrap; }
   .recent-table>div { @apply grid-cols-[88px_minmax(0,1fr)_62px]; }
   .recent-table em { @apply hidden; }
+}
+
+/* ---- Dark mode fixes for hard-coded colours ------------------------------ */
+@layer components {
+  .backdrop { background: rgb(2 6 23 / 0.6); }
+  .dark .backdrop { background: rgb(0 0 0 / 0.7); }
+  .dark .sidebar nav button.active { background: #e2e8f0; color: #0f172a; box-shadow: none; }
+  .dark .sidebar nav button.active svg { color: #0f172a; }
+  .dark .sidebar nav button.active:hover { background: #e2e8f0; color: #0f172a; }
+  .dark .brand-logo, .dark .auth-brand img { filter: drop-shadow(0 0 0.5px rgb(255 255 255 / 0.35)); }
+  .theme-toggle { @apply inline-grid h-8 w-8 place-items-center rounded-full border border-slate-300 bg-white p-0 text-slate-600 hover:bg-slate-100 hover:text-slate-900; }
+  .theme-toggle svg { transition: transform 0.4s cubic-bezier(0.2, 0.7, 0.2, 1); }
+  .theme-toggle:hover svg { transform: rotate(-20deg); }
+}
+
+/* Smooth colour change only while switching theme (avoids permanent transition cost). */
+html.theme-switching *, html.theme-switching *::before, html.theme-switching *::after {
+  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease, fill 0.3s ease !important;
+}
+
+/* ---- Motion ------------------------------------------------------------------ */
+@keyframes fade-up { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes pop-in { from { opacity: 0; transform: scale(0.97) translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes slide-down { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+
+/* Page content: each top-level block rises in, slightly staggered. */
+.page-enter > *, .page-enter > .stack > *, .page-enter > .dashboard > * { animation: fade-up 0.42s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.page-enter > .stack > *:nth-child(2), .page-enter > .dashboard > *:nth-child(2) { animation-delay: 0.05s; }
+.page-enter > .stack > *:nth-child(3), .page-enter > .dashboard > *:nth-child(3) { animation-delay: 0.1s; }
+.page-enter > .stack > *:nth-child(4), .page-enter > .dashboard > *:nth-child(4) { animation-delay: 0.15s; }
+.page-enter > .stack > *:nth-child(n+5), .page-enter > .dashboard > *:nth-child(n+5) { animation-delay: 0.2s; }
+.anim-pop { animation: pop-in 0.22s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.anim-fade { animation: fade-in 0.2s ease-out both; }
+.anim-drop { animation: slide-down 0.25s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.anim-list > * { animation: fade-up 0.3s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.anim-list > *:nth-child(2) { animation-delay: 0.03s; } .anim-list > *:nth-child(3) { animation-delay: 0.06s; }
+.anim-list > *:nth-child(4) { animation-delay: 0.09s; } .anim-list > *:nth-child(n+5) { animation-delay: 0.12s; }
+
+/* Tactile buttons and calmer hovers. */
+button { transition: background-color 0.15s, border-color 0.15s, color 0.15s, transform 0.12s ease, box-shadow 0.15s; }
+button:active:not(:disabled) { transform: scale(0.97); }
+.sidebar nav button svg { transition: transform 0.2s ease; }
+.sidebar nav button:hover:not(.active) svg { transform: translateX(2px); }
+.card { transition: box-shadow 0.2s ease, border-color 0.2s ease; }
+.summary-band > div { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+.summary-band > div:hover { transform: translateY(-2px); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.001ms !important; animation-delay: 0s !important; transition-duration: 0.001ms !important; }
+  button:active:not(:disabled) { transform: none; }
 }
