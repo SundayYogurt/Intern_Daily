@@ -1,6 +1,6 @@
 # สมุดฝึกงาน
 
-เว็บสำหรับนักศึกษาบันทึกงานรายวัน ให้พี่เลี้ยงรับรองเป็นรอบ และสร้างเอกสาร DOCX/PDF จากข้อมูลที่กรอก ใช้ **React + Vite + Tailwind CSS** สำหรับหน้าเว็บ และ **Go Fiber + SQLite** สำหรับ API และข้อมูล
+เว็บสำหรับนักศึกษาบันทึกงานรายวัน ให้พี่เลี้ยงรับรองเป็นรอบ และสร้างเอกสาร DOCX/PDF จากข้อมูลที่กรอก ใช้ **React + Vite + Tailwind CSS** สำหรับหน้าเว็บ และ **Go Fiber + PostgreSQL** (เช่น Supabase) สำหรับ API และข้อมูล
 
 ## เริ่มใช้งานบน Windows
 
@@ -11,10 +11,11 @@ cd web
 npm install
 npm run build
 cd ..\server
+$env:DATABASE_URL = "postgresql://USER:PASSWORD@HOST:5432/postgres"
 go run .
 ```
 
-เปิด `http://127.0.0.1:8080` หรือใช้ `start.ps1` หลังจาก build แล้ว ข้อมูลจะอยู่ใน `server/data/internship.db` ซึ่งไม่รวมอยู่ในไฟล์โปรเจกต์
+เปิด `http://127.0.0.1:8080` หรือใช้ `start.ps1` หลังจาก build แล้ว (ต้องตั้ง `DATABASE_URL` ก่อน) ตารางจะถูกสร้างอัตโนมัติตอนเซิร์ฟเวอร์เริ่มทำงาน
 
 หากใช้ไฟล์ `server/internship-journal.exe` ที่แนบไว้ เปิด `start.ps1` ได้เลยโดยไม่ต้องติดตั้ง Go หรือ Node.js บน Windows เครื่องนี้
 

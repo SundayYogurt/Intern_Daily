@@ -20,11 +20,11 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	_ "github.com/lib/pq"
 	"golang.org/x/crypto/bcrypt"
-	_ "modernc.org/sqlite"
 )
 
-var db *sql.DB
+var db *DB
 
 type User struct {
 	ID          int64  `json:"id"`
@@ -114,19 +114,21 @@ type Data struct {
 }
 
 func main() {
-	dataDir := getenv("DATA_DIR", "data")
-	if err := os.MkdirAll(dataDir, 0700); err != nil {
-		log.Fatal(err)
+	dsn := os.Getenv("DATABASE_URL")
+	if dsn == "" {
+		log.Fatal("DATABASE_URL is required (PostgreSQL connection string)")
 	}
-	var err error
-	db, err = sql.Open("sqlite", filepath.Join(dataDir, "internship.db"))
+	sqlDB, err := sql.Open("postgres", dsn)
 	if err != nil {
 		log.Fatal(err)
 	}
-	db.SetMaxOpenConns(1)
-	if _, err = db.Exec("PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000; PRAGMA journal_mode=WAL;"); err != nil {
-		log.Fatal(err)
+	sqlDB.SetMaxOpenConns(5)
+	sqlDB.SetMaxIdleConns(2)
+	sqlDB.SetConnMaxIdleTime(5 * time.Minute)
+	if err = sqlDB.Ping(); err != nil {
+		log.Fatal("connect database: ", err)
 	}
+	db = &DB{sqlDB}
 	if err = migrate(); err != nil {
 		log.Fatal(err)
 	}
@@ -190,16 +192,16 @@ func sameOrigin(origin string, c *fiber.Ctx) bool {
 
 func migrate() error {
 	_, err := db.Exec(`CREATE TABLE IF NOT EXISTS users (
-		id INTEGER PRIMARY KEY, email TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, role TEXT NOT NULL,
+		id BIGSERIAL PRIMARY KEY, email TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, role TEXT NOT NULL,
 		name TEXT NOT NULL DEFAULT '', phone TEXT NOT NULL DEFAULT '', position TEXT NOT NULL DEFAULT '',
-		photo BLOB, photo_type TEXT NOT NULL DEFAULT '',
+		photo BYTEA, photo_type TEXT NOT NULL DEFAULT '',
 		birth_date TEXT NOT NULL DEFAULT '', home_address TEXT NOT NULL DEFAULT '', subdistrict TEXT NOT NULL DEFAULT '',
 		district TEXT NOT NULL DEFAULT '', province TEXT NOT NULL DEFAULT '', country TEXT NOT NULL DEFAULT '',
 		skills TEXT NOT NULL DEFAULT '', interests TEXT NOT NULL DEFAULT ''
 	);
-	CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, expires_at TEXT NOT NULL);
+	CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE, expires_at TEXT NOT NULL);
 	CREATE TABLE IF NOT EXISTS internships (
-		id INTEGER PRIMARY KEY, student_id INTEGER UNIQUE NOT NULL REFERENCES users(id), mentor_id INTEGER REFERENCES users(id),
+		id BIGSERIAL PRIMARY KEY, student_id BIGINT UNIQUE NOT NULL REFERENCES users(id), mentor_id BIGINT REFERENCES users(id),
 		university TEXT NOT NULL DEFAULT '', faculty TEXT NOT NULL DEFAULT '', major TEXT NOT NULL DEFAULT '', student_number TEXT NOT NULL DEFAULT '', class_group TEXT NOT NULL DEFAULT '',
 		year TEXT NOT NULL DEFAULT '', term TEXT NOT NULL DEFAULT '', company TEXT NOT NULL DEFAULT '', company_address TEXT NOT NULL DEFAULT '',
 		department TEXT NOT NULL DEFAULT '', position TEXT NOT NULL DEFAULT '', start_date TEXT NOT NULL DEFAULT '', end_date TEXT NOT NULL DEFAULT '',
@@ -207,47 +209,25 @@ func migrate() error {
 		plan_type TEXT NOT NULL DEFAULT 'internship', holiday_dates_json TEXT NOT NULL DEFAULT '[]'
 	);
 	CREATE TABLE IF NOT EXISTS invites (
-		token_hash TEXT PRIMARY KEY, internship_id INTEGER NOT NULL REFERENCES internships(id), email TEXT NOT NULL, expires_at TEXT NOT NULL, used_at TEXT
-	);
-	CREATE TABLE IF NOT EXISTS day_logs (
-		id INTEGER PRIMARY KEY, internship_id INTEGER NOT NULL REFERENCES internships(id), date TEXT NOT NULL,
-		start_time TEXT NOT NULL DEFAULT '', end_time TEXT NOT NULL DEFAULT '', break_minutes INTEGER NOT NULL DEFAULT 0,
-		kind TEXT NOT NULL DEFAULT 'work', late INTEGER NOT NULL DEFAULT 0, work TEXT NOT NULL DEFAULT '', blockers TEXT NOT NULL DEFAULT '', learning TEXT NOT NULL DEFAULT '',
-		approval_id INTEGER REFERENCES approvals(id), UNIQUE(internship_id,date)
+		token_hash TEXT PRIMARY KEY, internship_id BIGINT NOT NULL REFERENCES internships(id), email TEXT NOT NULL, expires_at TEXT NOT NULL, used_at TEXT
 	);
 	CREATE TABLE IF NOT EXISTS approvals (
-		id INTEGER PRIMARY KEY, internship_id INTEGER NOT NULL REFERENCES internships(id), mentor_id INTEGER NOT NULL REFERENCES users(id),
+		id BIGSERIAL PRIMARY KEY, internship_id BIGINT NOT NULL REFERENCES internships(id), mentor_id BIGINT NOT NULL REFERENCES users(id),
 		from_date TEXT NOT NULL, to_date TEXT NOT NULL, typed_name TEXT NOT NULL, signed_at TEXT NOT NULL
 	);
+	CREATE TABLE IF NOT EXISTS day_logs (
+		id BIGSERIAL PRIMARY KEY, internship_id BIGINT NOT NULL REFERENCES internships(id), date TEXT NOT NULL,
+		start_time TEXT NOT NULL DEFAULT '', end_time TEXT NOT NULL DEFAULT '', break_minutes INTEGER NOT NULL DEFAULT 0,
+		kind TEXT NOT NULL DEFAULT 'work', late BOOLEAN NOT NULL DEFAULT FALSE, work TEXT NOT NULL DEFAULT '', blockers TEXT NOT NULL DEFAULT '', learning TEXT NOT NULL DEFAULT '',
+		approval_id BIGINT REFERENCES approvals(id), UNIQUE(internship_id,date)
+	);
 	CREATE TABLE IF NOT EXISTS evaluations (
-		internship_id INTEGER PRIMARY KEY REFERENCES internships(id), scores_json TEXT NOT NULL DEFAULT '{}',
+		internship_id BIGINT PRIMARY KEY REFERENCES internships(id), scores_json TEXT NOT NULL DEFAULT '{}',
 		improvement TEXT NOT NULL DEFAULT '', strengths TEXT NOT NULL DEFAULT '', suggestions TEXT NOT NULL DEFAULT '',
 		typed_name TEXT NOT NULL DEFAULT '', submitted_at TEXT NOT NULL DEFAULT ''
 	);`)
 	if err != nil {
 		return err
-	}
-	_, err = db.Exec(`ALTER TABLE day_logs ADD COLUMN late INTEGER NOT NULL DEFAULT 0`)
-	if err != nil && !strings.Contains(err.Error(), "duplicate column name") {
-		return err
-	}
-	for _, statement := range []string{
-		`ALTER TABLE internships ADD COLUMN plan_type TEXT NOT NULL DEFAULT 'internship'`,
-		`ALTER TABLE internships ADD COLUMN holiday_dates_json TEXT NOT NULL DEFAULT '[]'`,
-		`ALTER TABLE internships ADD COLUMN class_group TEXT NOT NULL DEFAULT ''`,
-		`ALTER TABLE users ADD COLUMN birth_date TEXT NOT NULL DEFAULT ''`,
-		`ALTER TABLE users ADD COLUMN home_address TEXT NOT NULL DEFAULT ''`,
-		`ALTER TABLE users ADD COLUMN subdistrict TEXT NOT NULL DEFAULT ''`,
-		`ALTER TABLE users ADD COLUMN district TEXT NOT NULL DEFAULT ''`,
-		`ALTER TABLE users ADD COLUMN province TEXT NOT NULL DEFAULT ''`,
-		`ALTER TABLE users ADD COLUMN country TEXT NOT NULL DEFAULT ''`,
-		`ALTER TABLE users ADD COLUMN skills TEXT NOT NULL DEFAULT ''`,
-		`ALTER TABLE users ADD COLUMN interests TEXT NOT NULL DEFAULT ''`,
-	} {
-		_, err = db.Exec(statement)
-		if err != nil && !strings.Contains(err.Error(), "duplicate column name") {
-			return err
-		}
 	}
 	_, err = db.Exec(`UPDATE internships SET university='มหาวิทยาลัยราชภัฏนครปฐม', year='2569', term='2' WHERE university!='มหาวิทยาลัยราชภัฏนครปฐม' OR year!='2569' OR term!='2'`)
 	if err != nil {
@@ -334,11 +314,11 @@ func register(c *fiber.Ctx) error {
 		return fail(c, 500, "ฐานข้อมูลไม่พร้อม")
 	}
 	defer tx.Rollback()
-	r, e := tx.Exec(`INSERT INTO users(email,password_hash,role,name) VALUES(?,?,?,?)`, in.Email, string(pass), role, in.Name)
+	var id int64
+	e = tx.QueryRow(`INSERT INTO users(email,password_hash,role,name) VALUES(?,?,?,?) RETURNING id`, in.Email, string(pass), role, in.Name).Scan(&id)
 	if e != nil {
 		return fail(c, 409, "อีเมลนี้ถูกใช้งานแล้ว")
 	}
-	id, _ := r.LastInsertId()
 	if role == "student" {
 		_, e = tx.Exec(`INSERT INTO internships(student_id,university,year,term) VALUES(?,'มหาวิทยาลัยราชภัฏนครปฐม','2569','2')`, id)
 	} else {
@@ -775,11 +755,11 @@ func approve(c *fiber.Ctx) error {
 		return fail(c, 400, "ไม่มีรายการที่รอรับรองในช่วงนี้")
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
-	r, e := tx.Exec(`INSERT INTO approvals(internship_id,mentor_id,from_date,to_date,typed_name,signed_at) VALUES(?,?,?,?,?,?)`, x.ID, u.ID, in.From, in.To, in.TypedName, now)
+	var id int64
+	e = tx.QueryRow(`INSERT INTO approvals(internship_id,mentor_id,from_date,to_date,typed_name,signed_at) VALUES(?,?,?,?,?,?) RETURNING id`, x.ID, u.ID, in.From, in.To, in.TypedName, now).Scan(&id)
 	if e != nil {
 		return fail(c, 500, "รับรองไม่สำเร็จ")
 	}
-	id, _ := r.LastInsertId()
 	_, e = tx.Exec(`UPDATE day_logs SET approval_id=? WHERE internship_id=? AND date BETWEEN ? AND ? AND approval_id IS NULL`, id, x.ID, in.From, in.To)
 	if e != nil {
 		return fail(c, 500, "รับรองไม่สำเร็จ")
