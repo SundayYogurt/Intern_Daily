@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -27,6 +28,25 @@ const aiSystemPrompt = `คุณเป็นผู้ช่วยเขีย�
 - ใช้เฉพาะข้อเท็จจริงจากข้อมูลที่ให้มา ห้ามแต่งงาน ตัวเลข ชื่อระบบ หรือผลลัพธ์ที่ไม่มีในข้อมูล
 - ห้ามใส่ข้อมูลลับของบริษัท รหัสผ่าน หรือข้อมูลส่วนบุคคลของผู้อื่น
 - ตอบเฉพาะเนื้อหาที่ขอ ไม่ต้องมีคำนำ คำอธิบาย หรือหัวข้อ Markdown`
+
+// Writing guide distilled from the faculty's sample internship report (no personal data).
+//
+//go:embed templates/report_guide.md
+var reportGuideRaw string
+
+// reportGuide returns the general style rules and the guidance for one report section key.
+func reportGuide(key string) (general, section string) {
+	for _, block := range strings.Split(reportGuideRaw, "\n## ")[1:] {
+		name, body, _ := strings.Cut(block, "\n")
+		switch strings.TrimSpace(name) {
+		case "general":
+			general = strings.TrimSpace(body)
+		case key:
+			section = strings.TrimSpace(body)
+		}
+	}
+	return general, section
+}
 
 func env(key string) string { return strings.TrimSpace(os.Getenv(key)) }
 
@@ -376,10 +396,17 @@ func aiReport(c *fiber.Ctx) error {
 		}
 	}
 	existing := strings.TrimSpace(x.Report[in.Key])
+	general, guide := reportGuide(in.Key)
 	prompt := fmt.Sprintf(`ร่างเนื้อหารายงานผลการฝึกงาน หัวข้อ "%s" (อยู่ใน %s)
-- เขียน 1–3 ย่อหน้า หรือเป็นข้อ ๆ ถ้าหัวข้อเหมาะกับรายการ (เช่น วัตถุประสงค์ เครื่องมือ ขั้นตอน)
+- ทำตามแนวการเขียนของคณะด้านล่าง (สรุปจากรายงานตัวอย่าง) ทั้งรูปแบบ ความยาว และสำนวน
 - อ้างอิงจากบันทึกรายวันจริงด้านล่างเท่านั้น ถ้าข้อมูลไม่พอสำหรับบางส่วน ให้เขียนเท่าที่มีและใส่ [เติมข้อมูล: ...] ตรงที่นักศึกษาต้องเติมเอง
 - ไม่ต้องใส่ชื่อหัวข้อซ้ำ
+
+แนวการเขียนทั้งเล่ม:
+%s
+
+แนวการเขียนของหัวข้อนี้:
+%s
 
 ข้อมูลการฝึกงาน:
 %s
@@ -390,7 +417,7 @@ func aiReport(c *fiber.Ctx) error {
 %s
 
 บันทึกรายวัน (%d วัน):
-%s`, label, chapter, internshipContext(x), dash(strings.Join(others, "\n")), dash(existing), count, digest)
+%s`, label, chapter, dash(general), dash(guide), internshipContext(x), dash(strings.Join(others, "\n")), dash(existing), count, digest)
 	return runAI(c, prompt)
 }
 
