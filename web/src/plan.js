@@ -32,3 +32,22 @@ export function calculatePlan(startDate, endDate, planType = 'internship', holid
     meetsRequirement: hours >= requiredHours && weekdays.size >= requiredWeekdays,
   }
 }
+
+// Weekdays from the internship start up to today (or the end date) that have no
+// daily log and are not marked as holidays. Newest first.
+export function missingLogDates(startDate, endDate, holidayDates = [], loggedDates = [], today) {
+  const start = parseDate(startDate)
+  const end = parseDate(endDate)
+  const now = parseDate(today)
+  if (!start || !now) return []
+  const last = end && end < now ? end : now
+  if (last < start || (last - start) / DAY > 3660) return []
+  const skip = new Set([...(holidayDates || []), ...(loggedDates || [])])
+  const missing = []
+  for (let time = last.getTime(); time >= start.getTime(); time -= DAY) {
+    const date = new Date(time)
+    const key = date.toISOString().slice(0, 10)
+    if (date.getUTCDay() !== 0 && date.getUTCDay() !== 6 && !skip.has(key)) missing.push(key)
+  }
+  return missing
+}

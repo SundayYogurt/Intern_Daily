@@ -166,6 +166,10 @@ func main() {
 	api.Post("/evaluation", saveEvaluation)
 	api.Get("/export/:kind.:format", exportDocument)
 	api.Get("/preview/:kind", previewDocument)
+	api.Get("/ai/status", aiStatus)
+	api.Post("/ai/polish", aiPolish)
+	api.Post("/ai/report", aiReport)
+	api.Post("/ai/weekly", aiWeekly)
 
 	webDist := getenv("WEB_DIST", "../web/dist")
 	if info, e := os.Stat(webDist); e == nil && info.IsDir() {
