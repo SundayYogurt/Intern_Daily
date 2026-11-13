@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -26,7 +27,8 @@ const aiSystemPrompt = `คุณเป็นผู้ช่วยเขีย�
 - เขียนเป็นภาษาไทยแบบทางการ กระชับ อ่านง่าย คำศัพท์เทคนิคใช้ภาษาอังกฤษได้
 - ใช้เฉพาะข้อเท็จจริงจากข้อมูลที่ให้มา ห้ามแต่งงาน ตัวเลข ชื่อระบบ หรือผลลัพธ์ที่ไม่มีในข้อมูล
 - ห้ามใส่ข้อมูลลับของบริษัท รหัสผ่าน หรือข้อมูลส่วนบุคคลของผู้อื่น
-- ตอบเฉพาะเนื้อหาที่ขอ ไม่ต้องมีคำนำ คำอธิบาย หรือหัวข้อ Markdown`
+- ตอบเฉพาะเนื้อหาที่ขอ ไม่ต้องมีคำนำ คำอธิบาย หรือคำปิดท้าย
+- เขียนเป็นข้อความธรรมดา ห้ามใช้ Markdown (ห้าม **, #, *, ตาราง, โค้ด) รายการให้ขึ้นต้นด้วย "- " หรือเลขข้อ เช่น 1.2.1 และเว้นบรรทัดว่างระหว่างย่อหน้า`
 
 func env(key string) string { return strings.TrimSpace(os.Getenv(key)) }
 
@@ -220,14 +222,62 @@ func aiGuard(c *fiber.Ctx) (User, *Internship, error) {
 	return u, x, nil
 }
 
-func runAI(c *fiber.Ctx, prompt string) error {
+// runAI calls the model and cleans the reply. label, when given, is the section title
+// the model sometimes repeats as the first line.
+func runAI(c *fiber.Ctx, prompt string, label ...string) error {
 	ctx, cancel := context.WithTimeout(c.Context(), 110*time.Second)
 	defer cancel()
 	text, err := aiChat(ctx, prompt)
 	if err != nil {
 		return fail(c, 502, "AI ทำงานไม่สำเร็จ: "+err.Error())
 	}
+	heading := ""
+	if len(label) > 0 {
+		heading = label[0]
+	}
+	if text = cleanAIText(text, heading); text == "" {
+		return fail(c, 502, "AI ไม่ได้ส่งข้อความกลับมา")
+	}
 	return c.JSON(fiber.Map{"text": text})
+}
+
+var (
+	codeFenceRe   = regexp.MustCompile("(?m)^```[a-zA-Z]*\\s*$")
+	starBulletRe  = regexp.MustCompile(`(?m)^(\s*)[*•·]\s+`)
+	hashHeadingRe = regexp.MustCompile(`(?m)^#{1,6}\s*`)
+	manyBlankRe   = regexp.MustCompile(`\n{3,}`)
+	headingPrefix = regexp.MustCompile(`^[\d.\s]+`)
+	preambleWords = []string{"แน่นอน", "นี่คือ", "ต่อไปนี้คือ", "ด้านล่างนี้คือ", "ได้เลย", "ร่างเนื้อหา", "ข้อความที่เกลาแล้ว", "Here is", "Sure"}
+)
+
+// cleanAIText removes Markdown, chatty preambles and a repeated section heading so the
+// text drops straight into the report and renders cleanly in the exported documents.
+func cleanAIText(text, heading string) string {
+	text = strings.ReplaceAll(strings.TrimSpace(text), "\r", "")
+	text = codeFenceRe.ReplaceAllString(text, "")
+	text = strings.NewReplacer("**", "", "__", "", "`", "").Replace(text)
+	text = hashHeadingRe.ReplaceAllString(text, "")
+	text = starBulletRe.ReplaceAllString(text, "$1- ")
+	lines := strings.Split(strings.TrimSpace(text), "\n")
+	if len(lines) > 1 {
+		first := strings.TrimSpace(lines[0])
+		for _, w := range preambleWords {
+			if strings.HasPrefix(first, w) && (strings.HasSuffix(first, ":") || len([]rune(first)) < 60) {
+				lines = lines[1:]
+				break
+			}
+		}
+	}
+	if heading != "" && len(lines) > 1 {
+		norm := func(s string) string {
+			return strings.TrimSpace(strings.TrimSuffix(headingPrefix.ReplaceAllString(strings.TrimSpace(s), ""), ":"))
+		}
+		if norm(lines[0]) == norm(heading) {
+			lines = lines[1:]
+		}
+	}
+	text = strings.Join(lines, "\n")
+	return strings.TrimSpace(manyBlankRe.ReplaceAllString(text, "\n\n"))
 }
 
 func internshipContext(x *Internship) string {
@@ -391,7 +441,7 @@ func aiReport(c *fiber.Ctx) error {
 
 บันทึกรายวัน (%d วัน):
 %s`, label, chapter, internshipContext(x), dash(strings.Join(others, "\n")), dash(existing), count, digest)
-	return runAI(c, prompt)
+	return runAI(c, prompt, label)
 }
 
 // POST /api/ai/weekly {from, to}
