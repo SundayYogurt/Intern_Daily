@@ -1,0 +1,264 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Sarabun", Tahoma, sans-serif;
+}
+
+@layer base {
+  body { @apply m-0 bg-slate-50 font-sans text-sm text-slate-800; }
+  button { @apply cursor-pointer rounded-md border border-slate-300 bg-white px-3.5 py-2 font-semibold text-slate-800 transition-colors hover:border-blue-400 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50; }
+  input, textarea, select { @apply font-sans; }
+}
+
+@layer components {
+  .primary { @apply inline-flex items-center justify-center gap-2 border-blue-900 bg-blue-900 text-white hover:border-blue-800 hover:bg-blue-800; }
+  .full { @apply w-full; }
+  .text-button, .inline-link { @apply border-0 bg-transparent p-0 font-semibold text-blue-800 hover:bg-transparent hover:underline; }
+  .eyebrow, .section-index, .date-overline, .kicker { @apply text-[11px] font-semibold tracking-widest text-slate-500; }
+  .muted { @apply text-slate-500; }
+  .loading { @apply grid min-h-screen place-items-center text-blue-900; }
+
+  .app-shell { @apply flex min-h-screen; }
+  .sidebar { @apply sticky top-0 flex h-screen w-[235px] shrink-0 flex-col border-r border-slate-200 bg-white py-5; }
+  .brand { @apply flex items-center gap-3 border-b border-slate-200 px-6 pb-6; }
+  .brand-logo { @apply block h-10 w-10 shrink-0; }
+  .brand strong { @apply block text-base leading-tight font-semibold; }
+  .brand small { @apply mt-1 block text-[10px] text-slate-400; }
+  .sidebar nav { @apply flex flex-col gap-1 px-3 py-6; }
+  .sidebar nav button { @apply flex items-center gap-3 border-0 bg-transparent px-4 py-2.5 text-left text-[13px] font-medium text-slate-600 hover:bg-slate-100 hover:text-blue-950; }
+  .sidebar nav button svg { @apply shrink-0 text-slate-400; }
+  .sidebar nav button.active { @apply border-l-[3px] border-blue-800 bg-blue-50 font-semibold text-blue-950; }
+  .sidebar nav button.active svg { @apply text-blue-800; }
+  .sidebar-footer { @apply mx-4 mt-auto flex items-center gap-2 border-t border-slate-200 px-2 pt-4; }
+  .sidebar-footer strong { @apply block max-w-[115px] truncate text-[11px]; }
+  .sidebar-footer small { @apply block text-[10px] text-slate-400; }
+  .sidebar-footer button { @apply ml-auto grid place-items-center border-0 bg-transparent p-1.5 text-slate-500; }
+  .avatar { @apply grid h-8 w-8 shrink-0 place-items-center rounded-full bg-blue-100 font-semibold text-blue-900; }
+  .avatar.small { @apply h-8 w-8; }
+  .main-shell { @apply min-w-0 flex-1; }
+  .topbar { @apply flex h-[92px] items-center justify-between border-b border-slate-200 bg-white px-10; }
+  .topbar-title h1 { @apply mt-1.5 text-2xl leading-tight font-semibold; }
+  .breadcrumb { @apply flex items-center gap-1.5 text-[11px] text-slate-400; }
+  .breadcrumb button { @apply border-0 bg-transparent p-0 text-[11px] font-medium text-slate-500 hover:bg-transparent hover:text-blue-800 hover:underline; }
+  .breadcrumb span[aria-current="page"] { @apply font-semibold text-blue-800; }
+  .topbar-right { @apply flex items-center gap-3; }
+  .pill { @apply inline-flex items-center gap-1.5 rounded-sm border border-slate-200 bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600; }
+  .content { @apply mx-auto max-w-[1300px] px-10 pt-9 pb-20; }
+
+  .dashboard { @apply flex flex-col; }
+  .overview-intro { @apply flex items-end justify-between gap-5 pb-8; }
+  .overview-intro .date-overline { @apply mb-3 block; }
+  .overview-intro h2 { @apply mb-1 text-[31px] leading-tight font-semibold tracking-tight; }
+  .overview-intro p:not(.date-overline) { @apply m-0 text-slate-500; }
+  .summary-band { @apply mb-7 grid grid-cols-4 border-y border-slate-300; }
+  .summary-band>div { @apply min-h-28 border-r border-slate-200 px-6 py-4; }
+  .summary-band>div:first-child { @apply pl-0; }
+  .summary-band>div:last-child { @apply border-r-0; }
+  .summary-icon { @apply mb-2 block text-blue-700/70; }
+  .summary-band span { @apply mb-1 block text-[11px] text-slate-500; }
+  .summary-band strong { @apply text-[27px] leading-tight font-semibold; }
+  .summary-band strong.summary-text { @apply text-lg; }
+  .summary-band small { @apply ml-1 text-[11px] text-slate-400; }
+  .dashboard-columns { @apply grid grid-cols-[42%_minmax(0,1fr)] items-start gap-5; }
+  .card { @apply rounded-md border border-slate-200 bg-white p-6; }
+  .section-head { @apply mb-5 flex items-end justify-between gap-4; }
+  .section-head .section-index { @apply mb-1 block; }
+  .section-head h2, .card h2 { @apply m-0 text-lg leading-snug font-semibold; }
+  .section-head .text-button { @apply inline-flex items-center gap-1 whitespace-nowrap text-[11px]; }
+  .task-list { @apply border-t border-slate-200; }
+  .task-list button { @apply flex w-full items-center gap-4 rounded-none border-0 border-b border-slate-200 bg-transparent px-0 py-4 text-left hover:bg-slate-50; }
+  .task-list button>svg { @apply ml-auto shrink-0 text-blue-800; }
+  .task-number { @apply w-6 shrink-0 text-[11px] text-slate-400; }
+  .task-list button span:nth-child(2) { @apply flex-1; }
+  .task-list strong, .task-list small { @apply block; }
+  .task-list strong { @apply text-[13px]; }
+  .task-list small { @apply mt-1 text-[11px] font-normal text-slate-400; }
+  .recent-table { @apply border-t border-slate-200; }
+  .recent-table>div { @apply grid grid-cols-[95px_minmax(0,1fr)_54px_73px] items-center gap-2.5 border-b border-slate-200 py-4; }
+  .recent-table span, .recent-table small { @apply text-[11px] text-slate-500; }
+  .recent-table strong { @apply truncate text-[13px] font-semibold; }
+  .recent-table small, .recent-table em { @apply text-right; }
+  .recent-table em { @apply text-[10px] not-italic text-amber-700; }
+  .recent-table em.is-approved { @apply text-blue-700; }
+  .empty { @apply px-3 py-8 text-center text-xs text-slate-400; }
+
+  .stack { @apply flex flex-col gap-5; }
+  .form-grid { @apply grid grid-cols-2 gap-x-5; }
+  .field { @apply mb-4 flex flex-col gap-1.5 text-[13px] font-semibold text-slate-700; }
+  .field input, .field textarea, .field select, .invite-link input { @apply w-full rounded-md border border-slate-300 bg-white px-3 py-2.5 font-normal text-slate-800 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100; }
+  .field input[readonly], .field textarea[readonly] { @apply cursor-default border-slate-200 bg-slate-100 text-slate-500 focus:border-slate-200 focus:ring-0; }
+  .field input:disabled, .field textarea:disabled, .field select:disabled { @apply cursor-not-allowed border-slate-200 bg-slate-100 text-slate-500 opacity-70 focus:border-slate-200 focus:ring-0; }
+  .field textarea { @apply min-h-24 resize-y leading-relaxed; }
+  .field small { @apply text-[11px] font-normal text-slate-400; }
+  .profile-row { @apply mb-6 flex items-center gap-4 border-b border-slate-200 pb-6; }
+  .profile-photo { @apply relative grid h-16 w-16 place-items-center overflow-hidden rounded-md bg-blue-50 text-2xl text-blue-800; }
+  .profile-photo img { @apply absolute z-10 h-full w-full object-cover; }
+  .upload-button { @apply inline-flex cursor-pointer items-center gap-2 border-b border-current text-[11px] font-semibold text-blue-800; }
+  .profile-row small { @apply text-[10px] text-slate-400; }
+  .invite-box { @apply mt-6 flex items-center justify-between gap-4 border-t border-slate-200 pt-5; }
+  .invite-box p { @apply mt-1 text-[11px] text-slate-500; }
+  .invite-link { @apply mt-3 flex flex-wrap gap-2; }
+  .invite-link input { @apply min-w-56 flex-1; }
+  .invite-link small { @apply w-full text-[10px] text-slate-500; }
+
+  .log-list { @apply flex flex-col; }
+  .log-card { @apply flex gap-5 border-t border-slate-200 py-5; }
+  .log-date { @apply flex w-14 shrink-0 flex-col items-center justify-center border-r border-slate-200 text-center; }
+  .log-date strong { @apply text-2xl leading-tight font-semibold; }
+  .log-date span { @apply text-[10px] text-slate-500; }
+  .log-body { @apply min-w-0 flex-1; }
+  .log-body p { @apply my-2 text-[13px] font-semibold whitespace-pre-wrap; }
+  .log-body small { @apply block text-[10px] text-slate-500; }
+  .log-top { @apply flex items-center gap-2; }
+  .tag, .status { @apply text-[10px] font-semibold; }
+  .tag { @apply text-slate-500; }
+  .status { @apply border-l border-slate-300 pl-2 text-amber-700; }
+  .status.approved { @apply text-blue-700; }
+  .log-actions { @apply flex gap-1.5; }
+  .log-actions button { @apply h-fit border-0 px-2 py-1 text-[10px]; }
+  .danger-text { @apply text-red-700; }
+  .late-check { @apply mb-4 flex items-center gap-2 text-[11px] font-semibold text-slate-600; }
+  .late-check input { @apply h-4 w-4 accent-blue-800; }
+
+  .segmented { @apply mb-5 inline-flex overflow-hidden rounded-md border border-slate-300; }
+  .segmented button { @apply rounded-none border-0 text-[11px]; }
+  .segmented button+button { @apply border-l border-slate-300; }
+  .segmented button.selected { @apply bg-blue-900 text-white; }
+  .approval-preview { @apply my-4 max-h-72 overflow-auto border-t border-slate-200; }
+  .approval-preview>div { @apply flex gap-4 border-b border-slate-200 py-2.5 text-[11px]; }
+  .approval-preview strong { @apply min-w-28; }
+  .approval-preview span { @apply flex-1; }
+  .approval-preview small { @apply text-slate-400; }
+  .approval-history>div { @apply flex gap-3 border-t border-slate-200 py-4; }
+  .approval-history p { @apply my-1 text-slate-500; }
+  .approval-history small { @apply text-slate-400; }
+  .seal { @apply grid h-7 w-7 shrink-0 place-items-center rounded-full bg-blue-50 text-blue-800; }
+
+  .criteria-group { @apply mt-6 border-t border-slate-200; }
+  .criteria-group h3, .report-group h3 { @apply my-5 text-[15px] font-semibold; }
+  .criterion { @apply grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 border-b border-slate-100 py-3 text-[11px]; }
+  .criterion strong { @apply mr-1 text-blue-800; }
+  .score-options { @apply flex gap-1; }
+  .score-options label { @apply cursor-pointer; }
+  .score-options input { @apply pointer-events-none absolute opacity-0; }
+  .score-options span { @apply grid h-7 w-7 place-items-center rounded-sm border border-slate-300 text-slate-600; }
+  .score-options input:disabled + span { @apply cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400; }
+  .score-options label.chosen span { @apply border-blue-800 bg-blue-800 text-white; }
+  .button-row { @apply flex gap-2; }
+  .info-box, .success-box { @apply border-l-[3px] border-teal-600 bg-teal-50 px-3 py-2.5 text-[11px]; }
+  .success-box { @apply border-blue-600 bg-blue-50; }
+  .report-group { @apply border-t border-slate-200 pt-3; }
+
+  .documents-intro { @apply pb-6; }
+  .documents-intro .section-index { @apply mb-2 block; }
+  .documents-intro h2 { @apply mb-1 text-[26px] font-semibold tracking-tight; }
+  .documents-intro p:last-child { @apply m-0 text-xs text-slate-500; }
+  .documents-list { @apply px-7 py-0; }
+  .doc-head { @apply flex justify-between border-b border-slate-200 py-4 text-[10px] font-semibold text-slate-400; }
+  .doc-row { @apply grid grid-cols-[38px_minmax(0,1fr)_auto] items-center gap-3 border-b border-slate-200 py-5 last:border-b-0; }
+  .doc-number { @apply text-[13px] text-slate-400; }
+  .doc-title { @apply flex items-center gap-2; }
+  .doc-title svg { @apply shrink-0 text-blue-700; }
+  .doc-main h3 { @apply m-0 text-[13px] font-semibold; }
+  .doc-main p { @apply mt-1 ml-7 text-[11px] text-slate-400; }
+  .doc-actions { @apply flex items-center gap-2; }
+  .doc-actions button { @apply inline-flex min-w-16 items-center justify-center gap-1.5 rounded-md border border-slate-300 px-2 py-2 text-[11px] font-semibold text-blue-900 hover:bg-blue-50; }
+  .doc-actions .muted { @apply text-[11px]; }
+  .document-note { @apply mt-6 flex gap-6 text-[11px] text-slate-500; }
+  .document-note strong { @apply shrink-0 text-blue-950; }
+
+  .auth-layout { @apply grid min-h-screen grid-cols-[minmax(0,1.1fr)_minmax(380px,.9fr)] bg-slate-50; }
+  .auth-panel { @apply flex min-h-screen flex-col bg-blue-950 px-12 py-9 text-white; }
+  .auth-brand { @apply flex items-center gap-2.5; }
+  .auth-brand .brand-logo { @apply h-11 w-11; }
+  .auth-brand strong { @apply text-[15px]; }
+  .auth-editorial { @apply my-auto max-w-xl; }
+  .auth-editorial .kicker { @apply text-blue-200; }
+  .auth-editorial h1 { @apply my-5 text-[clamp(42px,5vw,72px)] leading-tight font-semibold tracking-tighter; }
+  .auth-editorial p { @apply max-w-sm text-[15px] leading-relaxed text-blue-100/80; }
+  .auth-steps { @apply flex gap-6 border-t border-white/20 pt-5 text-[10px] text-blue-100/70; }
+  .auth-card { @apply m-auto w-[min(430px,calc(100%-60px))]; }
+  .auth-card h2 { @apply mt-1.5 mb-7 text-[27px] font-semibold tracking-tight; }
+  .auth-card .field input { @apply bg-white py-3; }
+  .auth-card .text-button { @apply mt-5 text-[11px]; }
+  .auth-card .error { @apply bg-red-50 px-3 py-2 text-red-800; }
+  .auth-card .primary { @apply py-3; }
+  .error { @apply text-red-700; }
+}
+
+@layer components {
+  .sidebar { @apply w-[248px] border-r-0 bg-slate-950 text-slate-100; }
+  .brand { @apply border-slate-800; }
+  .brand small { @apply text-slate-400; }
+  .sidebar nav button { @apply h-9 rounded-md text-slate-300 hover:bg-slate-800 hover:text-white; }
+  .sidebar nav button.active { @apply border-l-0 bg-blue-600 text-white; }
+  .sidebar nav button.active svg { @apply text-white; }
+  .sidebar-footer { @apply border-slate-800; }
+  .sidebar-footer button { @apply text-slate-400 hover:text-white; }
+  .topbar { @apply h-24 border-slate-200 bg-slate-50; }
+  .topbar-title h1 { @apply text-[25px] text-slate-950; }
+  .content { @apply max-w-[1440px] pt-7; }
+  .primary { @apply border-blue-600 bg-blue-600 text-white hover:border-blue-700 hover:bg-blue-700; }
+  .card { @apply rounded-lg border-slate-200; }
+  .summary-band { @apply gap-0 rounded-lg border border-slate-200 bg-white; }
+  .summary-band>div:first-child { @apply pl-6; }
+  .summary-band strong { @apply text-slate-950 tabular-nums; }
+  .summary-icon { @apply hidden; }
+  .log-date { @apply border-l-2 border-l-blue-600 border-r-0; }
+  button:focus-visible, a:focus-visible { @apply outline-2 outline-offset-2 outline-blue-600; }
+  .dashboard-columns { @apply grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]; }
+  .overview-intro h2 { @apply text-[28px]; }
+  .eyebrow, .section-index { @apply tracking-normal text-xs; }
+  .auth-panel { @apply bg-slate-950; }
+  .auth-editorial h1 { @apply text-[48px] leading-snug; }
+  .pill { @apply rounded-md bg-white; }
+  .info-box { @apply border-blue-500 bg-blue-50 text-slate-700; }
+}
+
+@media (max-width: 1120px) {
+  .content { @apply px-7 pt-7; }
+  .topbar { @apply px-7; }
+  .dashboard-columns { @apply grid-cols-1; }
+  .summary-band>div { @apply px-4; }
+}
+
+@media (max-width: 780px) {
+  .app-shell { @apply block; }
+  .sidebar { @apply relative h-auto w-full py-3; }
+  .brand { @apply px-5 pb-3; }
+  .brand-logo { @apply h-9 w-9; }
+  .sidebar nav { @apply flex-row flex-wrap gap-1 overflow-visible px-3 pt-2 pb-0; }
+  .sidebar nav button { @apply gap-1.5 px-2.5 py-2 text-[11px] whitespace-nowrap; }
+  .sidebar nav button svg { @apply h-3.5 w-3.5; }
+  .sidebar-footer { @apply hidden; }
+  .topbar { @apply h-[72px] px-5; }
+  .topbar-title h1 { @apply text-xl; }
+  .topbar-right .pill { @apply hidden; }
+  .content { @apply px-5 pt-6 pb-12; }
+  .overview-intro { @apply items-start; }
+  .overview-intro h2 { @apply text-[26px]; }
+  .overview-intro .primary { @apply px-2.5 py-2 text-[11px]; }
+  .summary-band { @apply grid-cols-2; }
+  .summary-band>div { @apply border-b border-slate-200 px-4 py-3.5; }
+  .summary-band>div:first-child { @apply pl-4; }
+  .summary-band>div:nth-child(2) { @apply border-r-0; }
+  .summary-band>div:nth-child(n+3) { @apply border-b-0; }
+  .form-grid { @apply grid-cols-1; }
+  .card { @apply p-5; }
+  .criterion { @apply grid-cols-1 gap-2; }
+  .auth-layout { @apply grid-cols-1; }
+  .auth-panel { @apply min-h-80 p-6; }
+  .auth-editorial { @apply my-9; }
+  .auth-editorial h1 { @apply my-3 text-[38px]; }
+  .auth-editorial p { @apply text-xs; }
+  .auth-steps { @apply gap-2.5 text-[9px]; }
+  .auth-card { @apply w-[calc(100%-40px)] py-8; }
+  .document-note { @apply block; }
+  .document-note strong { @apply mb-1.5 block; }
+  .doc-head { @apply hidden; }
+  .doc-row { @apply grid-cols-[28px_minmax(0,1fr)]; }
+  .doc-main p { @apply ml-0; }
+  .doc-actions { @apply col-start-2 flex-wrap; }
+  .recent-table>div { @apply grid-cols-[88px_minmax(0,1fr)_62px]; }
+  .recent-table em { @apply hidden; }
+}

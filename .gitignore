@@ -1,0 +1,10 @@
+web/node_modules/
+web/dist/
+server/data/
+server/*.exe
+*.db
+*.db-shm
+*.db-wal
+.env
+.env.*
+!.env.example

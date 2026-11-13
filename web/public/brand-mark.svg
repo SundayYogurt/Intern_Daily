@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">สมุดฝึกงาน</title>
+  <rect width="64" height="64" rx="13" fill="#2563EB"/>
+  <path d="M19 12.5h24a4 4 0 0 1 4 4v31a4 4 0 0 1-4 4H19a3 3 0 0 1-3-3v-33a3 3 0 0 1 3-3Z" fill="#FFFFFF"/>
+  <path d="M22 12.5v39" stroke="#BFDBFE" stroke-width="2"/>
+  <path d="M28 22h12M28 28h9" stroke="#64748B" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="m27 39 5 5 11-12" fill="none" stroke="#2563EB" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
