@@ -9,6 +9,7 @@ Run the Go server behind an HTTPS reverse proxy. The same server serves the fron
 | `ADDR` | `0.0.0.0:8080` | Listen address; match the platform's port |
 | `DATABASE_URL` | `postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres` | **Required.** PostgreSQL connection string (Supabase: Connect → Session pooler). Tables are created on startup |
 | `WEB_DIST` | `/app/web/dist` | Absolute path to the built frontend |
+| `APP_ORIGINS` | `https://interndaily.vercel.app` | Optional. Extra allowed origins (comma-separated) when a separate frontend, e.g. Vercel, proxies `/api` to this server |
 | `APP_SECURE_COOKIE` | `1` | Send login cookies only over HTTPS; use `0` for local HTTP |
 | `PDF_BROWSER` | `/usr/bin/chromium` | Actual installed Chrome/Chromium executable for PDF generation |
 

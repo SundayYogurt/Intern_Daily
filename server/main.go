@@ -186,7 +186,25 @@ func getenv(k, fallback string) string {
 func fail(c *fiber.Ctx, status int, message string) error {
 	return c.Status(status).JSON(fiber.Map{"error": message})
 }
+
+// allowedOrigins lists extra trusted origins from APP_ORIGINS (comma-separated),
+// e.g. a Vercel frontend that proxies /api to this server.
+func allowedOrigins() []string {
+	var out []string
+	for _, o := range strings.Split(os.Getenv("APP_ORIGINS"), ",") {
+		if o = strings.TrimRight(strings.TrimSpace(o), "/"); o != "" {
+			out = append(out, o)
+		}
+	}
+	return out
+}
+
 func sameOrigin(origin string, c *fiber.Ctx) bool {
+	for _, o := range allowedOrigins() {
+		if strings.EqualFold(origin, o) {
+			return true
+		}
+	}
 	return origin == "http://"+c.Hostname() || origin == "https://"+c.Hostname() || origin == "http://"+c.Get("Host") || origin == "https://"+c.Get("Host") || (strings.HasPrefix(origin, "http://127.0.0.1:5173") && strings.HasPrefix(c.Get("Host"), "127.0.0.1:5173"))
 }
 
