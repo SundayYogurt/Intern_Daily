@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Toaster, toast } from 'react-hot-toast'
-import { LayoutDashboard, UserRound, CalendarDays, BadgeCheck, ClipboardCheck, BookOpenText, Files, LogOut, ChevronRight, Plus, ArrowUpRight, Download, Clock3, CheckCircle2, FileText, FileUp, ImagePlus, Copy, ListChecks, Building2, Eye, X, CircleHelp, Sparkles, BellRing, TriangleAlert, ChevronLeft, Users, Search, RefreshCw, KeyRound } from 'lucide-react'
+import { LayoutDashboard, UserRound, CalendarDays, BadgeCheck, ClipboardCheck, BookOpenText, Files, LogOut, ChevronRight, Plus, ArrowUpRight, Download, Clock3, CheckCircle2, FileText, FileUp, ImagePlus, Copy, ListChecks, Building2, Eye, X, CircleHelp, Sparkles, BellRing, TriangleAlert, ChevronLeft, Users, Search, RefreshCw, KeyRound, CircleAlert, Lightbulb } from 'lucide-react'
 import { calculatePlan, missingLogDates } from './plan.js'
 import { provinces } from './provinces.js'
 import { validateProfile, validateInternship, validateLog, validateApproval } from './validation.js'
@@ -70,8 +70,8 @@ function Field({ label, value, onChange, type = 'text', placeholder = '', requir
   return <label className="field"><span>{label}</span><input type={type} value={value ?? ''} onChange={e => onChange?.(e.target.value)} placeholder={placeholder} required={required} maxLength={maxLength} readOnly={readOnly} disabled={disabled} aria-readonly={readOnly || undefined} {...inputProps} />{note && <small>{note}</small>}</label>
 }
 
-function TextArea({ label, value, onChange, rows = 4, placeholder = '', readOnly = false, disabled = false, maxLength, required = false }) {
-  return <label className="field"><span>{label}</span><textarea rows={rows} value={value ?? ''} onChange={e => onChange?.(e.target.value)} placeholder={placeholder} readOnly={readOnly} disabled={disabled} maxLength={maxLength} required={required} /></label>
+function TextArea({ label, value, onChange, rows = 4, placeholder = '', readOnly = false, disabled = false, maxLength, required = false, id }) {
+  return <label className="field"><span>{label}</span><textarea id={id} rows={rows} value={value ?? ''} onChange={e => onChange?.(e.target.value)} placeholder={placeholder} readOnly={readOnly} disabled={disabled} maxLength={maxLength} required={required} /></label>
 }
 
 function Button({ children, busy, ...props }) { return <button {...props} disabled={busy || props.disabled}>{busy ? 'กำลังบันทึก…' : children}</button> }
@@ -258,8 +258,9 @@ function App() {
   const dataRef = useRef(null)
   dataRef.current = data
   useEffect(() => {
-    if (data?.user?.role !== 'student') return
+    if (!data?.user) return
     request('/ai/status').then(v => setAi(Boolean(v?.enabled))).catch(() => setAi(false))
+    if (data.user.role !== 'student') return
     const { missed } = missedDays(data)
     try {
       const key = `missed-toast-${data.user.id}-${todayISO()}`
@@ -347,7 +348,7 @@ function App() {
         <div className="topbar-title"><nav className="breadcrumb" aria-label="เส้นทางการนำทาง"><button onClick={() => setTab('overview')}>สมุดฝึกงาน</button><ChevronRight size={13} aria-hidden="true" /><span aria-current="page">{headings[tab]}</span></nav><h1>{headings[tab]}</h1></div>
         <div className="topbar-right">{student && <button type="button" data-tour="tour-button" className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-blue-900 hover:bg-slate-50" onClick={() => setTouring(true)}><CircleHelp size={15} aria-hidden="true" />คู่มือ</button>}<span className="pill"><Building2 size={14} aria-hidden="true" />{data.internship?.company || 'ยังไม่ระบุบริษัท'}</span><Avatar user={data.user} version={avatarVersion} className="avatar small" title={data.user.name} /></div>
       </header>
-      <main className="content">{tab === 'overview' && <Overview data={data} student={student} go={setTab} startLog={startLog} notify={notify} toggleNotify={toggleNotify} />}{tab === 'profile' && <Profile data={data} student={student} action={action} refresh={load} avatarVersion={avatarVersion} onPhotoChanged={() => setAvatarVersion(Date.now())} />}{tab === 'logs' && <Logs data={data} student={student} action={action} ai={ai} initialDate={logDate} onDateUsed={() => setLogDate('')} />}{tab === 'approvals' && <Approvals data={data} student={student} action={action} />}{tab === 'evaluation' && !student && <Evaluation data={data} student={student} action={action} />}{tab === 'report' && student && <Report data={data} student={student} action={action} ai={ai} />}{tab === 'documents' && student && <Documents data={data} student={student} go={setTab} />}{tab === 'admin' && data.user.is_admin && <AdminUsers me={data.user} />}</main>
+      <main className="content">{tab === 'overview' && <Overview data={data} student={student} go={setTab} startLog={startLog} notify={notify} toggleNotify={toggleNotify} />}{tab === 'profile' && <Profile data={data} student={student} action={action} refresh={load} avatarVersion={avatarVersion} onPhotoChanged={() => setAvatarVersion(Date.now())} />}{tab === 'logs' && <Logs data={data} student={student} action={action} ai={ai} initialDate={logDate} onDateUsed={() => setLogDate('')} />}{tab === 'approvals' && <Approvals data={data} student={student} action={action} ai={ai} />}{tab === 'evaluation' && !student && <Evaluation data={data} student={student} action={action} />}{tab === 'report' && student && <Report data={data} student={student} action={action} ai={ai} />}{tab === 'documents' && student && <Documents data={data} student={student} go={setTab} />}{tab === 'admin' && data.user.is_admin && <AdminUsers me={data.user} />}</main>
     </div>
     {touring && student && <Tour steps={studentTour} go={setTab} onClose={closeTour} />}
   </div>
@@ -800,7 +801,7 @@ function AdminUsers({ me }) {
   </div>
 }
 
-function Approvals({ data, student, action }) {
+function Approvals({ data, student, action, ai }) {
   const [frequency, setFrequency] = useState('week')
   const [range, setRange] = useState(period('week'))
   const [typed, setTyped] = useState('')
@@ -812,7 +813,7 @@ function Approvals({ data, student, action }) {
     const ok = await action(() => post('/approvals', { ...range, typed_name: typed }), `${pending.length} รายการได้รับการรับรองแล้ว`)
     if (ok) setTyped('')
   }
-  return <div className="stack">{!student && <section className="card"><div className="section-head"><div><p className="eyebrow">ตรวจและรับรอง</p><h2>รับรองบันทึกเป็นรอบ</h2></div></div><div className="segmented"><button className={frequency === 'week' ? 'selected' : ''} onClick={() => { setFrequency('week'); setRange(period('week')) }}>รายสัปดาห์</button><button className={frequency === 'month' ? 'selected' : ''} onClick={() => { setFrequency('month'); setRange(period('month')) }}>รายเดือน</button></div><form onSubmit={approve}><div className="form-grid"><Field label="ตั้งแต่วันที่" type="date" value={range.from} onChange={v => setRange({ ...range, from: v })} max={blankLog().date} required /><Field label="ถึงวันที่" type="date" value={range.to} onChange={v => setRange({ ...range, to: v })} min={range.from || undefined} max={blankLog().date} required /></div><p className="muted">รายการที่ยังไม่รับรองในช่วงนี้: <strong>{pending.length}</strong></p>{pending.length > 0 && <div className="approval-preview">{pending.map(l => <div key={l.id}><strong>{formatDate(l.date)}</strong><span>{l.work || kindName(l.kind)}</span><small>{l.hours.toFixed(1)} ชม.</small></div>)}</div>}<Field label="พิมพ์ชื่อ–นามสกุลเพื่อรับรอง" value={typed} onChange={setTyped} placeholder={data.user.name} note={`ต้องตรงกับชื่อในโปรไฟล์: ${data.user.name}`} /><Button className="primary" disabled={!pending.length || typed !== data.user.name}>รับรอง {pending.length} รายการ</Button></form></section>}<section className="card" data-tour="approvals"><div className="section-head"><div><p className="eyebrow">รอบที่รับรองแล้ว</p><h2>ประวัติการรับรอง</h2></div></div>{data.approvals.length ? <div className="approval-history">{data.approvals.map(a => <div key={a.id}><span className="seal">✓</span><div><strong>{formatDate(a.from)} – {formatDate(a.to)}</strong><p>{a.typed_name} · {a.count} รายการ</p><small>ยืนยันเมื่อ {formatDateTime(a.signed_at)}</small></div></div>)}</div> : <p className="empty">ยังไม่มีรอบที่พี่เลี้ยงรับรอง</p>}</section></div>
+  return <div className="stack">{!student && <section className="card"><div className="section-head"><div><p className="eyebrow">ตรวจและรับรอง</p><h2>รับรองบันทึกเป็นรอบ</h2></div></div><div className="segmented"><button className={frequency === 'week' ? 'selected' : ''} onClick={() => { setFrequency('week'); setRange(period('week')) }}>รายสัปดาห์</button><button className={frequency === 'month' ? 'selected' : ''} onClick={() => { setFrequency('month'); setRange(period('month')) }}>รายเดือน</button></div><form onSubmit={approve}><div className="form-grid"><Field label="ตั้งแต่วันที่" type="date" value={range.from} onChange={v => setRange({ ...range, from: v })} max={blankLog().date} required /><Field label="ถึงวันที่" type="date" value={range.to} onChange={v => setRange({ ...range, to: v })} min={range.from || undefined} max={blankLog().date} required /></div><p className="muted">รายการที่ยังไม่รับรองในช่วงนี้: <strong>{pending.length}</strong></p>{pending.length > 0 && <div className="approval-preview">{pending.map(l => <div key={l.id}><strong>{formatDate(l.date)}</strong><span>{l.work || kindName(l.kind)}</span><small>{l.hours.toFixed(1)} ชม.</small></div>)}</div>}<Field label="พิมพ์ชื่อ–นามสกุลเพื่อรับรอง" value={typed} onChange={setTyped} placeholder={data.user.name} note={`ต้องตรงกับชื่อในโปรไฟล์: ${data.user.name}`} /><Button className="primary" disabled={!pending.length || typed !== data.user.name}>รับรอง {pending.length} รายการ</Button></form><ApprovalSummary range={range} ai={ai} /></section>}<section className="card" data-tour="approvals"><div className="section-head"><div><p className="eyebrow">รอบที่รับรองแล้ว</p><h2>ประวัติการรับรอง</h2></div></div>{data.approvals.length ? <div className="approval-history">{data.approvals.map(a => <div key={a.id}><span className="seal">✓</span><div><strong>{formatDate(a.from)} – {formatDate(a.to)}</strong><p>{a.typed_name} · {a.count} รายการ</p><small>ยืนยันเมื่อ {formatDateTime(a.signed_at)}</small></div></div>)}</div> : <p className="empty">ยังไม่มีรอบที่พี่เลี้ยงรับรอง</p>}</section></div>
 }
 
 function Evaluation({ data, student, action }) {
@@ -831,11 +832,73 @@ function Evaluation({ data, student, action }) {
   return <div className="stack"><section className="card"><div className="section-head"><div><p className="eyebrow">ผลการฝึกงาน</p><h2>แบบประเมินการฝึกงาน</h2></div><span className="pill">{submitted ? 'ส่งผลแล้ว' : `${completed}/${total} ข้อ`}</span></div><p className="muted">คะแนน 4 ดีมาก · 3 ดี · 2 พอใช้ · 1 ต้องปรับปรุง · 0 ไม่ผ่าน · * ประเมินไม่ได้</p>{student && !submitted && <p className="info-box">พี่เลี้ยงเป็นผู้กรอกแบบประเมิน เมื่อส่งผลแล้วจึงส่งออกเอกสารได้</p>}{submitted && <p className="success-box">พี่เลี้ยง {data.evaluation.typed_name} ส่งผลเมื่อ {formatDateTime(data.evaluation.submitted_at)}</p>}{criteria.map(([group, items]) => <div className="criteria-group" key={group}><h3>{group}</h3>{items.map(([key, label]) => <div className="criterion" key={key}><div><strong>{key}</strong> {label}</div><div className="score-options">{['4', '3', '2', '1', '0', '*'].map(score => <label key={score} className={form.scores?.[key] === score ? 'chosen' : ''}><input type="radio" name={key} value={score} checked={form.scores?.[key] === score} onChange={() => updateScore(key, score)} disabled={student || submitted} /><span>{score}</span></label>)}</div></div>)}</div>)}<div className="form-grid"><TextArea label="ข้อบกพร่องที่ควรแก้ไข ปรับปรุง" value={form.improvement} onChange={v => setForm({ ...form, improvement: v })} disabled={student || submitted} /><TextArea label="ความสามารถพิเศษ" value={form.strengths} onChange={v => setForm({ ...form, strengths: v })} disabled={student || submitted} /></div><TextArea label="ข้อเสนอแนะอื่น ๆ" value={form.suggestions} onChange={v => setForm({ ...form, suggestions: v })} disabled={student || submitted} />{!student && !submitted && <><Field label="พิมพ์ชื่อผู้ประเมินเพื่อส่งผล" value={form.typed_name} onChange={v => setForm({ ...form, typed_name: v })} placeholder={data.user.name} /><div className="button-row"><button onClick={() => save(false)}>บันทึกแบบร่าง</button><button className="primary" onClick={() => save(true)} disabled={completed !== total || form.typed_name !== data.user.name}>ส่งแบบประเมิน</button></div></>}</section></div>
 }
 
+const severityView = {
+  error: ['ต้องแก้', 'border-red-200 bg-red-50 text-red-800', CircleAlert],
+  warn: ['ควรแก้', 'border-amber-200 bg-amber-50 text-amber-900', TriangleAlert],
+  tip: ['คำแนะนำ', 'border-sky-200 bg-sky-50 text-sky-900', Lightbulb],
+}
+
+function ReportReview({ report, ai }) {
+  const [busy, setBusy] = useState(false)
+  const [result, setResult] = useState(null)
+  async function run() {
+    setBusy(true)
+    try { setResult(await post('/ai/review-report', { report })) }
+    catch (e) { toast.error(e.message) }
+    finally { setBusy(false) }
+  }
+  function jump(key) {
+    const el = document.getElementById(`report-${key}`)
+    if (!el) return
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    setTimeout(() => el.focus({ preventScroll: true }), 350)
+  }
+  const issues = result?.issues || []
+  const order = { error: 0, warn: 1, tip: 2 }
+  const isEmpty = i => i.source === 'rule' && i.message === 'ยังไม่ได้เขียนหัวข้อนี้'
+  const empty = issues.filter(isEmpty)
+  const sorted = issues.filter(i => !isEmpty(i)).sort((a, b) => order[a.severity] - order[b.severity])
+  const count = sev => issues.filter(i => i.severity === sev).length
+  return <section className="card" aria-label="ตรวจรายงานก่อนส่ง" data-tour="report-review">
+    <div className="section-head"><div><p className="eyebrow">ก่อนส่งอาจารย์</p><h2>ตรวจรายงาน</h2></div><button type="button" className="inline-flex items-center gap-1.5 rounded-lg bg-violet-700 px-4 py-2 text-xs font-semibold text-white hover:bg-violet-800 disabled:opacity-50" onClick={run} disabled={busy}><ListChecks size={14} aria-hidden="true" />{busy ? (ai ? 'AI กำลังอ่านรายงาน…' : 'กำลังตรวจ…') : result ? 'ตรวจอีกครั้ง' : 'ตรวจรายงาน'}</button></div>
+    {!result && <p className="text-xs text-slate-500">ตรวจหัวข้อที่ยังว่าง [เติมข้อมูล] ที่ค้าง และเนื้อหาที่สั้นเกินไป{ai ? ' แล้วให้ AI อ่านเทียบกับบันทึกรายวัน หาข้อความที่ไม่ตรงกับงานจริง การใช้ “ผม/เรา” คำสะกดผิด และเนื้อหาที่ขาดตามแนวการเขียนของคณะ' : ''} ตรวจจากข้อความที่เห็นบนหน้าจอ แม้ยังไม่ได้กดบันทึก</p>}
+    {result && <>
+      <div className="mb-3 flex flex-wrap gap-2 text-xs">{['error', 'warn', 'tip'].map(sev => <span key={sev} className={`rounded-full border px-2.5 py-0.5 font-semibold ${severityView[sev][1]}`}>{severityView[sev][0]} {count(sev)}</span>)}{result.ai_used && <span className="rounded-full border border-violet-200 bg-violet-50 px-2.5 py-0.5 font-semibold text-violet-800">AI ตรวจแล้ว</span>}</div>
+      {result.ai_error && <p className="mb-3 text-xs text-amber-800">{result.ai_error}</p>}
+      {!sorted.length && !empty.length ? <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">ไม่พบปัญหา พร้อมดาวน์โหลดไปส่งได้</p> :
+        <ul className="flex flex-col gap-2">{empty.length > 0 && <li className={`flex gap-2.5 rounded-lg border px-3 py-2 text-sm ${severityView.error[1]}`}><CircleAlert size={16} className="mt-0.5 shrink-0" aria-hidden="true" /><div className="min-w-0 flex-1"><div className="text-xs font-semibold">ต้องแก้ · ยังไม่ได้เขียน {empty.length} หัวข้อ</div><div className="mt-1.5 flex flex-wrap gap-1.5">{empty.map(i => <button key={i.key} type="button" className="rounded-full border border-red-200 bg-white px-2.5 py-0.5 text-xs font-medium text-red-800 hover:bg-red-100" onClick={() => jump(i.key)}>{i.label}</button>)}</div></div></li>}{sorted.map((issue, i) => { const [label, cls, Icon] = severityView[issue.severity] || severityView.warn; return <li key={i} className={`flex gap-2.5 rounded-lg border px-3 py-2 text-sm ${cls}`}><Icon size={16} className="mt-0.5 shrink-0" aria-hidden="true" /><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-x-2 text-xs font-semibold"><span>{label}</span>{issue.key !== 'general' ? <button type="button" className="border-0 bg-transparent p-0 text-xs font-semibold text-inherit underline underline-offset-2 shadow-none" onClick={() => jump(issue.key)}>{issue.label}</button> : <span>{issue.label}</span>}{issue.source === 'ai' && <span className="rounded bg-white/70 px-1 text-[10px] text-violet-700">AI</span>}</div><p className="mt-0.5 leading-relaxed">{issue.message}</p></div></li> })}</ul>}
+      {result.ai_used && <p className="mt-3 text-[11px] text-slate-400">ผลจาก AI อาจผิดพลาดได้ ใช้เป็นข้อสังเกตประกอบการตรวจด้วยตัวเอง</p>}
+    </>}
+  </section>
+}
+
+function ApprovalSummary({ range, ai }) {
+  const [busy, setBusy] = useState(false)
+  const [result, setResult] = useState(null)
+  useEffect(() => { setResult(null) }, [range.from, range.to])
+  async function run() {
+    setBusy(true)
+    try { setResult(await post('/ai/approval-summary', range)) }
+    catch (e) { toast.error(e.message) }
+    finally { setBusy(false) }
+  }
+  const flags = result?.flags || []
+  return <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/70 p-4" data-tour="approval-summary">
+    <div className="flex flex-wrap items-center justify-between gap-2"><div><strong className="text-sm text-slate-900">ตรวจช่วงนี้ก่อนรับรอง</strong><p className="text-xs text-slate-500">{ai ? 'AI สรุปงานในช่วงที่เลือก และระบบชี้วันที่ควรตรวจเพิ่ม' : 'ระบบชี้วันที่ไม่มีบันทึก มาสาย หรือชั่วโมงผิดปกติ'}</p></div><button type="button" className="inline-flex items-center gap-1.5 rounded-lg border border-violet-300 bg-white px-3 py-1.5 text-xs font-semibold text-violet-800 hover:bg-violet-50 disabled:opacity-50" onClick={run} disabled={busy}>{ai ? <Sparkles size={13} aria-hidden="true" /> : <ListChecks size={13} aria-hidden="true" />}{busy ? 'กำลังสรุป…' : ai ? 'สรุปด้วย AI' : 'ตรวจช่วงนี้'}</button></div>
+    {result && <div className="mt-3 flex flex-col gap-3">
+      <p className="text-xs text-slate-600">บันทึก {result.log_count} วัน · รอรับรอง {result.pending_count} วัน</p>
+      {result.ai_error && <p className="text-xs text-amber-800">{result.ai_error}</p>}
+      {result.summary && <div className="whitespace-pre-wrap rounded-lg border border-violet-200 bg-white p-3 text-sm leading-relaxed text-slate-800" aria-label="สรุปจาก AI">{result.summary}</div>}
+      {flags.length > 0 ? <ul className="flex flex-col gap-1.5">{flags.map((f, i) => { const [, cls, Icon] = severityView[f.severity] || severityView.warn; return <li key={i} className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs ${cls}`}><Icon size={14} className="shrink-0" aria-hidden="true" /><span className="w-24 shrink-0 font-semibold">{thaiShortDate(f.date)}</span><span>{f.message}</span></li> })}</ul> : <p className="text-xs text-emerald-700">ไม่พบวันที่ผิดปกติในช่วงนี้</p>}
+    </div>}
+  </div>
+}
+
 function Report({ data, student, action, ai }) {
   const [draft, setDraft] = useState(data.internship || {})
   const report = draft.report || {}
   function set(key, value) { setDraft(v => ({ ...v, report: { ...(v.report || {}), [key]: value } })) }
-  return <div className="stack"><section className="card" data-tour="report"><div className="section-head"><div><p className="eyebrow">รายงานส่งอาจารย์</p><h2>เขียนเนื้อหารายงาน</h2></div></div><p className="info-box">โครงบทอ้างอิงจากรายงานตัวอย่างของอาจารย์ เนื้อหาทุกช่องเป็นข้อมูลฝึกงานของคุณ ระบบจะนำวันและชั่วโมงไปสรุปในภาคผนวก</p>{reportFields.map(([group, fields]) => <div className="report-group" key={group}><h3>{group}</h3>{fields.map(([key, label]) => <React.Fragment key={key}><TextArea label={label} value={report[key] || ''} onChange={v => set(key, v)} rows={5} readOnly={!student} placeholder="เขียนจากงานที่ทำจริง โดยไม่ใส่ข้อมูลลับของบริษัท" />{student && ai && <AiAssist label="ร่างด้วย AI จากบันทึก" run={() => post('/ai/report', { key })} onApply={(text, mode) => set(key, mode === 'append' && (report[key] || '').trim() ? report[key].trimEnd() + '\n\n' + text : text)} modes={[['replace', 'แทนที่'], ['append', 'ต่อท้าย']]} disabled={!(data.logs || []).length} hint="ต้องมีบันทึกรายวันก่อน" />}</React.Fragment>)}</div>)}{student && <button className="primary" onClick={() => action(async () => { const latest = await request('/data'); return post('/internship', { ...latest.internship, report: draft.report }, 'PUT') }, 'บันทึกเนื้อหารายงานแล้ว')}>บันทึกรายงาน</button>}</section></div>
+  return <div className="stack">{student && <ReportReview report={report} ai={ai} />}<section className="card" data-tour="report"><div className="section-head"><div><p className="eyebrow">รายงานส่งอาจารย์</p><h2>เขียนเนื้อหารายงาน</h2></div></div><p className="info-box">โครงบทอ้างอิงจากรายงานตัวอย่างของอาจารย์ เนื้อหาทุกช่องเป็นข้อมูลฝึกงานของคุณ ระบบจะนำวันและชั่วโมงไปสรุปในภาคผนวก</p>{reportFields.map(([group, fields]) => <div className="report-group" key={group}><h3>{group}</h3>{fields.map(([key, label]) => <React.Fragment key={key}><TextArea id={`report-${key}`} label={label} value={report[key] || ''} onChange={v => set(key, v)} rows={5} readOnly={!student} placeholder="เขียนจากงานที่ทำจริง โดยไม่ใส่ข้อมูลลับของบริษัท" />{student && ai && <AiAssist label="ร่างด้วย AI จากบันทึก" run={() => post('/ai/report', { key })} onApply={(text, mode) => set(key, mode === 'append' && (report[key] || '').trim() ? report[key].trimEnd() + '\n\n' + text : text)} modes={[['replace', 'แทนที่'], ['append', 'ต่อท้าย']]} disabled={!(data.logs || []).length} hint="ต้องมีบันทึกรายวันก่อน" />}</React.Fragment>)}</div>)}{student && <button className="primary" onClick={() => action(async () => { const latest = await request('/data'); return post('/internship', { ...latest.internship, report: draft.report }, 'PUT') }, 'บันทึกเนื้อหารายงานแล้ว')}>บันทึกรายงาน</button>}</section></div>
 }
 
 function Documents({ data, student, go }) {
