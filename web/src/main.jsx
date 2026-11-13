@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Toaster, toast } from 'react-hot-toast'
-import { LayoutDashboard, UserRound, CalendarDays, BadgeCheck, ClipboardCheck, BookOpenText, Files, LogOut, ChevronRight, Plus, ArrowUpRight, Download, Clock3, CheckCircle2, FileText, FileUp, ImagePlus, Copy, ListChecks, Building2, Eye, X, CircleHelp } from 'lucide-react'
-import { calculatePlan } from './plan.js'
+import { LayoutDashboard, UserRound, CalendarDays, BadgeCheck, ClipboardCheck, BookOpenText, Files, LogOut, ChevronRight, Plus, ArrowUpRight, Download, Clock3, CheckCircle2, FileText, FileUp, ImagePlus, Copy, ListChecks, Building2, Eye, X, CircleHelp, Sparkles, BellRing, TriangleAlert } from 'lucide-react'
+import { calculatePlan, missingLogDates } from './plan.js'
 import { provinces } from './provinces.js'
 import { validateProfile, validateInternship, validateLog, validateApproval } from './validation.js'
 import '@fontsource/sarabun/400.css'
@@ -142,6 +142,37 @@ function SaveStatus({ state }) {
   </div>
 }
 
+// AI suggestion button + editable preview. Nothing changes until the user applies it.
+function AiAssist({ label = 'เกลาด้วย AI', run, onApply, modes = [['replace', 'ใช้ข้อความนี้']], disabled = false, hint = '' }) {
+  const [busy, setBusy] = useState(false)
+  const [text, setText] = useState('')
+  async function generate() {
+    setBusy(true)
+    try { const result = await run(); setText(result.text) }
+    catch (e) { toast.error(e.message) }
+    finally { setBusy(false) }
+  }
+  return <div className="-mt-1 mb-4">
+    <button type="button" title={disabled ? hint : ''} className="inline-flex items-center gap-1.5 rounded-md border border-violet-200 bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-800 hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-50" onClick={generate} disabled={busy || disabled}><Sparkles size={13} aria-hidden="true" />{busy ? 'AI กำลังเขียน…' : label}</button>
+    {disabled && hint && <span className="ml-2 text-[11px] text-slate-400">{hint}</span>}
+    {text && <div className="mt-2 rounded-lg border border-violet-200 bg-violet-50/60 p-3">
+      <p className="mb-1.5 text-[11px] font-semibold text-violet-700">ข้อเสนอจาก AI · แก้ไขได้ก่อนใช้ ตรวจข้อเท็จจริงทุกครั้ง</p>
+      <textarea className="w-full rounded-md border border-violet-200 bg-white p-2 text-sm leading-relaxed" value={text} onChange={e => setText(e.target.value)} rows={Math.min(14, text.split('\n').length + 1)} aria-label="ข้อความจาก AI" />
+      <div className="mt-2 flex flex-wrap gap-2">{modes.map(([mode, modeLabel]) => <button key={mode} type="button" className="rounded-md bg-violet-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-800" onClick={() => { onApply(text, mode); setText('') }}>{modeLabel}</button>)}<button type="button" className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600" onClick={() => setText('')}>ไม่ใช้</button></div>
+    </div>}
+  </div>
+}
+
+const todayISO = () => blankLog().date
+const bangkokClock = () => new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date())
+const thaiShortDate = iso => new Intl.DateTimeFormat('th-TH', { day: 'numeric', month: 'short', weekday: 'short', timeZone: 'UTC' }).format(new Date(iso + 'T00:00:00Z'))
+function missedDays(data) {
+  const x = data.internship || {}
+  const today = todayISO()
+  const all = missingLogDates(x.start_date, x.end_date, x.holiday_dates || [], (data.logs || []).map(l => l.date), today)
+  return { missed: all.filter(d => d !== today), todayMissing: all.includes(today) }
+}
+
 function Auth({ onAuth }) {
   const invite = location.pathname.startsWith('/invite/') ? location.pathname.split('/').pop() : ''
   const [mode, setMode] = useState(invite ? 'register' : 'login')
@@ -183,6 +214,49 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState('overview')
   const [touring, setTouring] = useState(false)
+  const [ai, setAi] = useState(false)
+  const [logDate, setLogDate] = useState('')
+  const [notify, setNotify] = useState(() => { try { return localStorage.getItem('log-reminder') === 'on' } catch { return false } })
+  const dataRef = useRef(null)
+  dataRef.current = data
+  useEffect(() => {
+    if (data?.user?.role !== 'student') return
+    request('/ai/status').then(v => setAi(Boolean(v?.enabled))).catch(() => setAi(false))
+    const { missed } = missedDays(data)
+    try {
+      const key = `missed-toast-${data.user.id}-${todayISO()}`
+      if (missed.length && !sessionStorage.getItem(key)) {
+        sessionStorage.setItem(key, '1')
+        toast(`ยังไม่ได้บันทึกงาน ${missed.length} วันทำงาน ดูได้ที่หน้าภาพรวม`, { icon: '⏰', duration: 6000 })
+      }
+    } catch {}
+  }, [data?.user?.id])
+  // Browser reminder at 17:30 on workdays without a log (works while the site is open).
+  useEffect(() => {
+    if (!notify || data?.user?.role !== 'student') return
+    const check = () => {
+      const current = dataRef.current
+      if (!current || typeof Notification === 'undefined' || Notification.permission !== 'granted') return
+      if (bangkokClock() < '17:30' || !missedDays(current).todayMissing) return
+      const key = `log-reminder-sent-${current.user.id}`
+      try { if (localStorage.getItem(key) === todayISO()) return; localStorage.setItem(key, todayISO()) } catch {}
+      const n = new Notification('สมุดฝึกงาน', { body: 'วันนี้ยังไม่ได้บันทึกงาน อย่าลืมบันทึกก่อนเลิกงานนะ', tag: 'log-reminder' })
+      n.onclick = () => { window.focus(); setTab('logs'); n.close() }
+    }
+    check()
+    const timer = setInterval(check, 60 * 1000)
+    return () => clearInterval(timer)
+  }, [notify, data?.user?.id])
+  async function toggleNotify() {
+    if (notify) { setNotify(false); try { localStorage.setItem('log-reminder', 'off') } catch {}; toast.success('ปิดการแจ้งเตือนแล้ว'); return }
+    if (typeof Notification === 'undefined') { toast.error('เบราว์เซอร์นี้ไม่รองรับการแจ้งเตือน'); return }
+    const permission = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission()
+    if (permission !== 'granted') { toast.error('ต้องอนุญาตการแจ้งเตือนในเบราว์เซอร์ก่อน'); return }
+    setNotify(true)
+    try { localStorage.setItem('log-reminder', 'on') } catch {}
+    toast.success('เปิดแจ้งเตือนแล้ว จะเตือนตอน 17:30 ถ้าวันนั้นยังไม่บันทึก')
+  }
+  function startLog(date) { setLogDate(date); setTab('logs') }
   const tourKey = data?.user ? `tour-done-v1-${data.user.id}` : ''
   useEffect(() => {
     if (data?.user?.role !== 'student' || location.pathname.startsWith('/invite/')) return
@@ -229,7 +303,7 @@ function App() {
         <div className="topbar-title"><nav className="breadcrumb" aria-label="เส้นทางการนำทาง"><button onClick={() => setTab('overview')}>สมุดฝึกงาน</button><ChevronRight size={13} aria-hidden="true" /><span aria-current="page">{headings[tab]}</span></nav><h1>{headings[tab]}</h1></div>
         <div className="topbar-right">{student && <button type="button" data-tour="tour-button" className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-blue-900 hover:bg-slate-50" onClick={() => setTouring(true)}><CircleHelp size={15} aria-hidden="true" />คู่มือ</button>}<span className="pill"><Building2 size={14} aria-hidden="true" />{data.internship?.company || 'ยังไม่ระบุบริษัท'}</span><div className="avatar small" title={data.user.name}>{data.user.name?.slice(0, 1) || '?'}</div></div>
       </header>
-      <main className="content">{tab === 'overview' && <Overview data={data} student={student} go={setTab} />}{tab === 'profile' && <Profile data={data} student={student} action={action} refresh={load} />}{tab === 'logs' && <Logs data={data} student={student} action={action} />}{tab === 'approvals' && <Approvals data={data} student={student} action={action} />}{tab === 'evaluation' && !student && <Evaluation data={data} student={student} action={action} />}{tab === 'report' && student && <Report data={data} student={student} action={action} />}{tab === 'documents' && student && <Documents data={data} student={student} go={setTab} />}</main>
+      <main className="content">{tab === 'overview' && <Overview data={data} student={student} go={setTab} startLog={startLog} notify={notify} toggleNotify={toggleNotify} />}{tab === 'profile' && <Profile data={data} student={student} action={action} refresh={load} />}{tab === 'logs' && <Logs data={data} student={student} action={action} ai={ai} initialDate={logDate} onDateUsed={() => setLogDate('')} />}{tab === 'approvals' && <Approvals data={data} student={student} action={action} />}{tab === 'evaluation' && !student && <Evaluation data={data} student={student} action={action} />}{tab === 'report' && student && <Report data={data} student={student} action={action} ai={ai} />}{tab === 'documents' && student && <Documents data={data} student={student} go={setTab} />}</main>
     </div>
     {touring && student && <Tour steps={studentTour} go={setTab} onClose={closeTour} />}
   </div>
@@ -246,10 +320,12 @@ const studentTour = [
   { tab: 'logs', target: 'log-form', title: '6. บันทึกงานทุกวัน', body: 'เลือกวันที่ เวลาเข้า–ออก เวลาพัก แล้วเขียนงานที่ทำ ปัญหา และสิ่งที่ได้เรียนรู้ ถ้าลา/หยุด ให้เปลี่ยนประเภทบันทึก' },
   { tab: 'logs', target: 'csv-import', title: 'นำเข้าทีละหลายวัน', body: 'ถ้าจดไว้ที่อื่นแล้ว ดาวน์โหลดแม่แบบ CSV กรอกแล้วอัปโหลดได้เลย ระบบจะตรวจวันซ้ำและข้อมูลผิดให้ก่อนนำเข้า' },
   { tab: 'logs', target: 'log-history', title: 'แก้ไขบันทึกย้อนหลัง', body: 'รายการที่บันทึกแล้วอยู่ตรงนี้ แก้ไขหรือลบได้จนกว่าพี่เลี้ยงจะรับรอง หลังรับรองแล้วจะถูกล็อก' },
+  { tab: 'logs', target: 'weekly-summary', title: 'ผู้ช่วย AI ✨', body: 'จดโน้ตสั้นๆ แล้วกด “เกลาด้วย AI” ใต้ช่องงานที่ทำ/ปัญหา/สิ่งที่เรียนรู้ ให้เป็นภาษาทางการ และใช้กล่องนี้สรุปงานรายสัปดาห์ได้ ทุกข้อความจาก AI ต้องกดยอมรับก่อนถึงจะใช้ (ปุ่ม AI จะขึ้นเมื่อผู้ดูแลระบบเปิดใช้)' },
   { tab: 'approvals', target: 'approvals', title: '7. ติดตามการรับรอง', body: 'พี่เลี้ยงจะรับรองบันทึกเป็นรอบรายสัปดาห์หรือรายเดือน หน้านี้แสดงว่ารอบไหนรับรองแล้ว ถ้ามีค้างให้เตือนพี่เลี้ยง' },
   { tab: 'report', target: 'report', title: '8. เขียนรายงาน', body: 'เขียนเนื้อหา 4 บทจากงานที่ทำจริง ไม่ต้องใส่ข้อมูลลับของบริษัท เขียนเสร็จแต่ละช่วงแล้วกดบันทึกรายงานด้านล่าง' },
   { tab: 'documents', target: 'documents', title: '9. ดาวน์โหลดเอกสาร', body: 'กดดูตัวอย่างก่อนได้ทุกเมื่อ พร้อมแล้วดาวน์โหลดเป็น DOCX หรือ PDF เพื่อส่งอาจารย์ แบบประเมินจะดาวน์โหลดได้หลังพี่เลี้ยงส่งผล' },
   { tab: 'overview', target: 'tasks', title: 'งานถัดไป', body: 'หน้าภาพรวมจะสรุปว่ายังเหลืออะไรต้องทำ กดที่รายการเพื่อไปยังหน้านั้นได้เลย' },
+  { tab: 'overview', target: 'reminder-toggle', title: 'กันลืมบันทึก ⏰', body: 'ถ้ามีวันทำงานที่ยังไม่ได้บันทึก จะขึ้นแถบเตือนที่หน้านี้ กดที่วันที่เพื่อบันทึกย้อนหลังได้เลย เปิดแจ้งเตือนในเบราว์เซอร์ไว้ ระบบจะเตือนตอน 17:30 ถ้าวันนั้นยังไม่บันทึก' },
   { tab: 'overview', target: 'tour-button', title: 'จบคู่มือแล้ว 🎉', body: 'ถ้าลืมขั้นตอนไหน กดปุ่ม “คู่มือ” ตรงนี้เพื่อเปิดดูอีกครั้งได้ตลอด' },
 ]
 
@@ -332,14 +408,16 @@ function Tour({ steps, go, onClose }) {
   </div>
 }
 
-function Overview({ data, student, go }) {
+function Overview({ data, student, go, startLog, notify, toggleNotify }) {
   const logs = data.logs || []
   const approved = logs.filter(x => x.approval_id).length
   const pending = logs.length - approved
   const hours = logs.reduce((a, x) => a + x.hours, 0)
   const firstName = data.user.name?.split(/\s+/)[0] || data.user.name
   const today = new Intl.DateTimeFormat('th-TH', { dateStyle: 'full', timeZone: 'Asia/Bangkok' }).format(new Date())
+  const { missed, todayMissing } = student ? missedDays(data) : { missed: [], todayMissing: false }
   const tasks = student ? [
+    missed.length > 0 && [`ยังไม่บันทึก ${missed.length} วัน`, 'วันทำงานที่ผ่านมาแล้วยังไม่มีบันทึก', 'logs'],
     !data.internship?.company && ['กรอกข้อมูลการฝึกงาน', 'ชื่อบริษัท ช่วงเวลา และพี่เลี้ยง', 'profile'],
     !logs.length && ['เริ่มบันทึกงาน', 'ใช้เวลาเพียงไม่กี่นาทีต่อวัน', 'logs'],
     pending > 0 && [`รอรับรอง ${pending} รายการ`, 'ติดตามรอบการรับรองกับพี่เลี้ยง', 'approvals'],
@@ -350,6 +428,15 @@ function Overview({ data, student, go }) {
   ].filter(Boolean)
   return <div className="dashboard">
     <section className="overview-intro"><div><p className="date-overline">{today}</p><h2>สวัสดี, {firstName}</h2><p>{student ? 'วันนี้มีอะไรที่ต้องบันทึกไว้บ้าง' : `กำลังดูแลการฝึกงานที่ ${data.internship?.company || 'สถานประกอบการ'}`}</p></div><button className="primary" onClick={() => go('logs')}>{student && <Plus size={17} aria-hidden="true" />}{student ? 'บันทึกงาน' : 'ดูบันทึกนักศึกษา'}</button></section>
+    {student && (missed.length > 0 || todayMissing) && <section className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 sm:flex-row sm:items-start sm:justify-between" role="alert" data-tour="reminder">
+      <div className="flex gap-2.5"><TriangleAlert size={18} className="mt-0.5 shrink-0" aria-hidden="true" /><div>
+        <strong className="block">{missed.length ? `ลืมบันทึก ${missed.length} วันทำงาน` : 'วันนี้ยังไม่ได้บันทึกงาน'}</strong>
+        {missed.length > 0 && <div className="mt-2 flex flex-wrap gap-1.5">{missed.slice(0, 8).map(d => <button key={d} type="button" className="rounded-full border border-amber-300 bg-white px-2.5 py-0.5 text-xs font-medium hover:bg-amber-100" onClick={() => startLog(d)}>{thaiShortDate(d)}</button>)}{missed.length > 8 && <span className="text-xs">และอีก {missed.length - 8} วัน</span>}</div>}
+        <small className="mt-1.5 block text-xs text-amber-800">กดที่วันที่เพื่อบันทึกย้อนหลัง ถ้าเป็นวันหยุด ให้เพิ่มในวันหยุดที่หน้าข้อมูลส่วนตัว</small>
+      </div></div>
+      <div className="flex shrink-0 gap-2">{todayMissing && <button type="button" className="rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700" onClick={() => startLog(todayISO())}>บันทึกวันนี้</button>}</div>
+    </section>}
+    {student && <div className="-mt-1 mb-3 flex justify-end"><button type="button" className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${notify ? 'border-blue-200 bg-blue-50 text-blue-800' : 'border-slate-300 bg-white text-slate-600'}`} data-tour="reminder-toggle" onClick={toggleNotify} title="แจ้งเตือนตอน 17:30 ถ้ายังไม่บันทึก (ต้องเปิดเว็บค้างไว้)"><BellRing size={14} aria-hidden="true" />{notify ? 'แจ้งเตือน 17:30 เปิดอยู่' : 'เปิดแจ้งเตือนลืมบันทึก'}</button></div>}
     <section className="summary-band" aria-label="สรุปการฝึกงาน"><div><CalendarDays size={18} className="summary-icon" aria-hidden="true" /><span>วันที่บันทึก</span><strong>{logs.length}</strong><small>วัน</small></div><div><Clock3 size={18} className="summary-icon" aria-hidden="true" /><span>ชั่วโมงปฏิบัติงาน</span><strong>{hours.toFixed(1)}</strong><small>ชั่วโมง</small></div><div><CheckCircle2 size={18} className="summary-icon" aria-hidden="true" /><span>รับรองแล้ว</span><strong>{approved}</strong><small>รายการ</small></div>{student ? <div><ListChecks size={18} className="summary-icon" aria-hidden="true" /><span>แผนการฝึก</span><strong className="summary-text">{data.internship?.plan_type === 'cooperative' ? 'สหกิจศึกษา' : 'ฝึกงาน'}</strong></div> : <div><ListChecks size={18} className="summary-icon" aria-hidden="true" /><span>แบบประเมิน</span><strong className="summary-text">{data.evaluation?.submitted_at ? 'ส่งแล้ว' : 'ยังไม่ส่ง'}</strong></div>}</section>
     <div className="dashboard-columns"><section className="card tasks-panel" data-tour="tasks"><div className="section-head"><div><span className="section-index">01 / สิ่งที่ต้องทำ</span><h2>งานถัดไป</h2></div></div>{tasks.length ? <div className="task-list">{tasks.map(([title, detail, target], i) => <button key={i} onClick={() => go(target)}><span className="task-number">{String(i + 1).padStart(2, '0')}</span><span><strong>{title}</strong><small>{detail}</small></span><ArrowUpRight size={16} aria-hidden="true" /></button>)}</div> : <p className="empty">{student ? 'รายการสำคัญครบแล้ว คุณสามารถตรวจเอกสารก่อนส่งได้' : 'ไม่มีงานที่ต้องรับรองในตอนนี้'}</p>}</section><section className="card recent-panel"><div className="section-head"><div><span className="section-index">02 / งานที่ผ่านมา</span><h2>บันทึกล่าสุด</h2></div><button className="text-button" onClick={() => go('logs')}><span>ดูทั้งหมด</span><ArrowUpRight size={14} aria-hidden="true" /></button></div>{logs.length ? <div className="recent-table">{logs.slice(0, 5).map(l => <div key={l.id}><span>{formatDate(l.date)}</span><strong>{l.work || kindName(l.kind)}</strong><small>{l.hours.toFixed(1)} ชม.</small><em className={l.approval_id ? 'is-approved' : ''}>{l.approval_id ? 'รับรองแล้ว' : 'รอรับรอง'}</em></div>)}</div> : <p className="empty">ยังไม่มีบันทึกประจำวัน</p>}</section></div>
   </div>
@@ -518,10 +605,18 @@ function CSVImport({ action }) {
   </section>
 }
 
-function Logs({ data, student, action }) {
+function Logs({ data, student, action, ai, initialDate, onDateUsed }) {
   const [form, setForm] = useState(blankLog())
   const [editing, setEditing] = useState(null)
   const set = key => value => setForm(x => ({ ...x, [key]: value }))
+  useEffect(() => {
+    if (!initialDate) return
+    setEditing(null)
+    setForm({ ...blankLog(), date: initialDate })
+    onDateUsed?.()
+    setTimeout(() => document.querySelector('[data-tour="log-form"]')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+  }, [initialDate])
+  const polish = field => ai && <AiAssist run={() => post('/ai/polish', { field, text: form[field], date: form.date })} onApply={text => set(field)(text)} disabled={!form[field]?.trim()} hint="พิมพ์โน้ตสั้นๆ ก่อน" />
   async function submit(e) {
     e.preventDefault()
     const error = validateLog(form, data.internship, data.logs || [], editing, blankLog().date)
@@ -530,7 +625,7 @@ function Logs({ data, student, action }) {
     if (ok) { setForm(blankLog()); setEditing(null) }
   }
   function edit(l) { setEditing(l.id); setForm({ ...l }); scrollTo({ top: 0, behavior: 'smooth' }) }
-  return <div className="stack">{student && <><CSVImport action={action} /><section className="card" data-tour="log-form"><div className="section-head"><div><p className="eyebrow">บันทึกงาน</p><h2>{editing ? 'แก้ไขบันทึก' : 'เพิ่มบันทึกประจำวัน'}</h2></div>{editing && <button onClick={() => { setEditing(null); setForm(blankLog()) }}>ยกเลิก</button>}</div><form onSubmit={submit}><div className="form-grid"><Field label="วันที่" type="date" value={form.date} onChange={set('date')} min={data.internship?.start_date || undefined} max={[data.internship?.end_date, blankLog().date].filter(Boolean).sort()[0]} required /><label className="field"><span>ประเภท</span><select value={form.kind} onChange={e => set('kind')(e.target.value)}><option value="work">ปฏิบัติงาน</option><option value="sick">ลาป่วย</option><option value="personal">ลากิจ</option><option value="holiday">วันหยุด</option></select></label>{form.kind === 'work' && <><Field label="เวลาเริ่ม" type="time" value={form.start_time} onChange={set('start_time')} required /><Field label="เวลาสิ้นสุด" type="time" value={form.end_time} onChange={set('end_time')} required /><Field label="พัก (นาที)" type="number" value={form.break_minutes} onChange={v => set('break_minutes')(Number(v))} min={0} max={600} step={1} /></>}</div>{form.kind === 'work' && <label className="late-check"><input type="checkbox" checked={Boolean(form.late)} onChange={e => set('late')(e.target.checked)} /> มาสายวันนี้</label>}<TextArea label="งานที่ปฏิบัติ" value={form.work} onChange={set('work')} rows={4} placeholder="วันนี้ทำอะไร ได้ผลอย่างไร" required={form.kind === 'work'} maxLength={4000} /><div className="form-grid"><TextArea label="ปัญหาที่พบ" value={form.blockers} onChange={set('blockers')} rows={3} maxLength={2000} /><TextArea label="สิ่งที่เรียนรู้" value={form.learning} onChange={set('learning')} rows={3} maxLength={2000} /></div><button className="primary">{editing ? 'บันทึกการแก้ไข' : 'เพิ่มบันทึก'}</button></form></section></>}<section className="card" data-tour="log-history"><div className="section-head"><div><p className="eyebrow">ประวัติบันทึก</p><h2>{student ? 'รายการที่บันทึก' : 'งานที่นักศึกษาบันทึก'}</h2></div><span className="pill">{data.logs.length} รายการ</span></div>{!student && <p className="mb-4 text-sm text-slate-600">บันทึกของ {data.internship?.student_name || 'นักศึกษา'} · ดูรายละเอียดได้อย่างเดียว การแก้ไขเป็นสิทธิ์ของนักศึกษา</p>}{data.logs.length ? <div className="log-list">{data.logs.map(l => <article className="log-card" key={l.id}><div className="log-date"><strong>{new Date(l.date + 'T12:00:00').getDate()}</strong><span>{new Intl.DateTimeFormat('th-TH', { month: 'short' }).format(new Date(l.date + 'T12:00:00'))}</span></div><div className="log-body"><div className="log-top"><span className="tag">{kindName(l.kind)}</span><span className={'status ' + (l.approval_id ? 'approved' : 'pending')}>{l.approval_id ? 'รับรองแล้ว' : 'รอรับรอง'}</span></div><p>{l.work || 'ไม่มีรายละเอียด'}</p><small>{l.kind === 'work' ? `${l.start_time}–${l.end_time} · ${l.hours.toFixed(1)} ชั่วโมง` : ''}</small>{l.blockers && <small>ปัญหา: {l.blockers}</small>}{l.learning && <small>เรียนรู้: {l.learning}</small>}</div>{student && <div className="log-actions"><button disabled={Boolean(l.approval_id)} title={l.approval_id ? 'พี่เลี้ยงรับรองแล้ว แก้ไขไม่ได้' : undefined} onClick={() => edit(l)}>แก้ไข</button><button className="danger-text" disabled={Boolean(l.approval_id)} title={l.approval_id ? 'พี่เลี้ยงรับรองแล้ว ลบไม่ได้' : undefined} onClick={() => { if (confirm('ลบบันทึกนี้?')) action(() => request(`/logs/${l.id}`, { method: 'DELETE' }), 'ลบบันทึกแล้ว') }}>ลบ</button></div>}</article>)}</div> : <p className="empty">ยังไม่มีบันทึกประจำวัน</p>}</section></div>
+  return <div className="stack">{student && <><CSVImport action={action} /><section className="card" data-tour="log-form"><div className="section-head"><div><p className="eyebrow">บันทึกงาน</p><h2>{editing ? 'แก้ไขบันทึก' : 'เพิ่มบันทึกประจำวัน'}</h2></div>{editing && <button onClick={() => { setEditing(null); setForm(blankLog()) }}>ยกเลิก</button>}</div><form onSubmit={submit}><div className="form-grid"><Field label="วันที่" type="date" value={form.date} onChange={set('date')} min={data.internship?.start_date || undefined} max={[data.internship?.end_date, blankLog().date].filter(Boolean).sort()[0]} required /><label className="field"><span>ประเภท</span><select value={form.kind} onChange={e => set('kind')(e.target.value)}><option value="work">ปฏิบัติงาน</option><option value="sick">ลาป่วย</option><option value="personal">ลากิจ</option><option value="holiday">วันหยุด</option></select></label>{form.kind === 'work' && <><Field label="เวลาเริ่ม" type="time" value={form.start_time} onChange={set('start_time')} required /><Field label="เวลาสิ้นสุด" type="time" value={form.end_time} onChange={set('end_time')} required /><Field label="พัก (นาที)" type="number" value={form.break_minutes} onChange={v => set('break_minutes')(Number(v))} min={0} max={600} step={1} /></>}</div>{form.kind === 'work' && <label className="late-check"><input type="checkbox" checked={Boolean(form.late)} onChange={e => set('late')(e.target.checked)} /> มาสายวันนี้</label>}<TextArea label="งานที่ปฏิบัติ" value={form.work} onChange={set('work')} rows={4} placeholder="วันนี้ทำอะไร ได้ผลอย่างไร" required={form.kind === 'work'} maxLength={4000} />{polish('work')}<div className="form-grid"><TextArea label="ปัญหาที่พบ" value={form.blockers} onChange={set('blockers')} rows={3} maxLength={2000} />{polish('blockers')}<TextArea label="สิ่งที่เรียนรู้" value={form.learning} onChange={set('learning')} rows={3} maxLength={2000} />{polish('learning')}</div><button className="primary">{editing ? 'บันทึกการแก้ไข' : 'เพิ่มบันทึก'}</button></form></section></>}{student && ai && <WeeklySummary />}<section className="card" data-tour="log-history"><div className="section-head"><div><p className="eyebrow">ประวัติบันทึก</p><h2>{student ? 'รายการที่บันทึก' : 'งานที่นักศึกษาบันทึก'}</h2></div><span className="pill">{data.logs.length} รายการ</span></div>{!student && <p className="mb-4 text-sm text-slate-600">บันทึกของ {data.internship?.student_name || 'นักศึกษา'} · ดูรายละเอียดได้อย่างเดียว การแก้ไขเป็นสิทธิ์ของนักศึกษา</p>}{data.logs.length ? <div className="log-list">{data.logs.map(l => <article className="log-card" key={l.id}><div className="log-date"><strong>{new Date(l.date + 'T12:00:00').getDate()}</strong><span>{new Intl.DateTimeFormat('th-TH', { month: 'short' }).format(new Date(l.date + 'T12:00:00'))}</span></div><div className="log-body"><div className="log-top"><span className="tag">{kindName(l.kind)}</span><span className={'status ' + (l.approval_id ? 'approved' : 'pending')}>{l.approval_id ? 'รับรองแล้ว' : 'รอรับรอง'}</span></div><p>{l.work || 'ไม่มีรายละเอียด'}</p><small>{l.kind === 'work' ? `${l.start_time}–${l.end_time} · ${l.hours.toFixed(1)} ชั่วโมง` : ''}</small>{l.blockers && <small>ปัญหา: {l.blockers}</small>}{l.learning && <small>เรียนรู้: {l.learning}</small>}</div>{student && <div className="log-actions"><button disabled={Boolean(l.approval_id)} title={l.approval_id ? 'พี่เลี้ยงรับรองแล้ว แก้ไขไม่ได้' : undefined} onClick={() => edit(l)}>แก้ไข</button><button className="danger-text" disabled={Boolean(l.approval_id)} title={l.approval_id ? 'พี่เลี้ยงรับรองแล้ว ลบไม่ได้' : undefined} onClick={() => { if (confirm('ลบบันทึกนี้?')) action(() => request(`/logs/${l.id}`, { method: 'DELETE' }), 'ลบบันทึกแล้ว') }}>ลบ</button></div>}</article>)}</div> : <p className="empty">ยังไม่มีบันทึกประจำวัน</p>}</section></div>
 }
 
 function period(kind) {
@@ -540,6 +635,39 @@ function period(kind) {
   if (kind === 'month') return { from: local(new Date(y, m, 1)), to: local(now) }
   const monday = new Date(y, m, d - ((now.getDay() + 6) % 7))
   return { from: local(monday), to: local(now) }
+}
+
+function shiftISO(iso, days) {
+  const d = new Date(iso + 'T00:00:00Z')
+  d.setUTCDate(d.getUTCDate() + days)
+  return d.toISOString().slice(0, 10)
+}
+function WeeklySummary() {
+  const thisWeek = period('week')
+  const [range, setRange] = useState(thisWeek)
+  const [busy, setBusy] = useState(false)
+  const [text, setText] = useState('')
+  const lastWeek = { from: shiftISO(thisWeek.from, -7), to: shiftISO(thisWeek.from, -1) }
+  async function generate() {
+    setBusy(true)
+    try { const result = await post('/ai/weekly', range); setText(result.text) }
+    catch (e) { toast.error(e.message) }
+    finally { setBusy(false) }
+  }
+  async function copy() {
+    try { await navigator.clipboard.writeText(text); toast.success('คัดลอกแล้ว') } catch { toast.error('คัดลอกไม่สำเร็จ') }
+  }
+  return <section className="card" data-tour="weekly-summary">
+    <div className="section-head"><div><p className="eyebrow">ผู้ช่วย AI</p><h2>สรุปงานรายสัปดาห์</h2></div><Sparkles size={19} className="text-violet-700" aria-hidden="true" /></div>
+    <p className="mb-4 text-xs text-slate-500">สรุปจากบันทึกรายวันในช่วงที่เลือก ใช้กรอก Weekly Planning / action plan ได้ ตรวจข้อเท็จจริงก่อนส่งทุกครั้ง</p>
+    <div className="flex flex-wrap items-end gap-3">
+      <div className="segmented"><button type="button" className={range.from === thisWeek.from && range.to === thisWeek.to ? 'selected' : ''} onClick={() => setRange(thisWeek)}>สัปดาห์นี้</button><button type="button" className={range.from === lastWeek.from && range.to === lastWeek.to ? 'selected' : ''} onClick={() => setRange(lastWeek)}>สัปดาห์ที่แล้ว</button></div>
+      <Field label="ตั้งแต่" type="date" value={range.from} onChange={v => setRange(r => ({ ...r, from: v }))} />
+      <Field label="ถึง" type="date" value={range.to} onChange={v => setRange(r => ({ ...r, to: v }))} />
+      <button type="button" className="mb-4 inline-flex items-center gap-1.5 rounded-lg bg-violet-700 px-4 py-2 text-xs font-semibold text-white hover:bg-violet-800 disabled:opacity-50" onClick={generate} disabled={busy}><Sparkles size={14} aria-hidden="true" />{busy ? 'AI กำลังสรุป…' : 'สรุปด้วย AI'}</button>
+    </div>
+    {text && <div className="mt-2"><textarea className="w-full rounded-md border border-violet-200 bg-violet-50/40 p-3 text-sm leading-relaxed" value={text} onChange={e => setText(e.target.value)} rows={Math.min(18, text.split('\n').length + 2)} aria-label="สรุปรายสัปดาห์" /><div className="mt-2 flex gap-2"><button type="button" className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold" onClick={copy}><Copy size={13} aria-hidden="true" />คัดลอก</button><button type="button" className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600" onClick={() => setText('')}>ล้าง</button></div></div>}
+  </section>
 }
 
 function Approvals({ data, student, action }) {
@@ -573,11 +701,11 @@ function Evaluation({ data, student, action }) {
   return <div className="stack"><section className="card"><div className="section-head"><div><p className="eyebrow">ผลการฝึกงาน</p><h2>แบบประเมินการฝึกงาน</h2></div><span className="pill">{submitted ? 'ส่งผลแล้ว' : `${completed}/${total} ข้อ`}</span></div><p className="muted">คะแนน 4 ดีมาก · 3 ดี · 2 พอใช้ · 1 ต้องปรับปรุง · 0 ไม่ผ่าน · * ประเมินไม่ได้</p>{student && !submitted && <p className="info-box">พี่เลี้ยงเป็นผู้กรอกแบบประเมิน เมื่อส่งผลแล้วจึงส่งออกเอกสารได้</p>}{submitted && <p className="success-box">พี่เลี้ยง {data.evaluation.typed_name} ส่งผลเมื่อ {formatDateTime(data.evaluation.submitted_at)}</p>}{criteria.map(([group, items]) => <div className="criteria-group" key={group}><h3>{group}</h3>{items.map(([key, label]) => <div className="criterion" key={key}><div><strong>{key}</strong> {label}</div><div className="score-options">{['4', '3', '2', '1', '0', '*'].map(score => <label key={score} className={form.scores?.[key] === score ? 'chosen' : ''}><input type="radio" name={key} value={score} checked={form.scores?.[key] === score} onChange={() => updateScore(key, score)} disabled={student || submitted} /><span>{score}</span></label>)}</div></div>)}</div>)}<div className="form-grid"><TextArea label="ข้อบกพร่องที่ควรแก้ไข ปรับปรุง" value={form.improvement} onChange={v => setForm({ ...form, improvement: v })} disabled={student || submitted} /><TextArea label="ความสามารถพิเศษ" value={form.strengths} onChange={v => setForm({ ...form, strengths: v })} disabled={student || submitted} /></div><TextArea label="ข้อเสนอแนะอื่น ๆ" value={form.suggestions} onChange={v => setForm({ ...form, suggestions: v })} disabled={student || submitted} />{!student && !submitted && <><Field label="พิมพ์ชื่อผู้ประเมินเพื่อส่งผล" value={form.typed_name} onChange={v => setForm({ ...form, typed_name: v })} placeholder={data.user.name} /><div className="button-row"><button onClick={() => save(false)}>บันทึกแบบร่าง</button><button className="primary" onClick={() => save(true)} disabled={completed !== total || form.typed_name !== data.user.name}>ส่งแบบประเมิน</button></div></>}</section></div>
 }
 
-function Report({ data, student, action }) {
+function Report({ data, student, action, ai }) {
   const [draft, setDraft] = useState(data.internship || {})
   const report = draft.report || {}
   function set(key, value) { setDraft(v => ({ ...v, report: { ...(v.report || {}), [key]: value } })) }
-  return <div className="stack"><section className="card" data-tour="report"><div className="section-head"><div><p className="eyebrow">รายงานส่งอาจารย์</p><h2>เขียนเนื้อหารายงาน</h2></div></div><p className="info-box">โครงบทอ้างอิงจากรายงานตัวอย่างของอาจารย์ เนื้อหาทุกช่องเป็นข้อมูลฝึกงานของคุณ ระบบจะนำวันและชั่วโมงไปสรุปในภาคผนวก</p>{reportFields.map(([group, fields]) => <div className="report-group" key={group}><h3>{group}</h3>{fields.map(([key, label]) => <TextArea key={key} label={label} value={report[key] || ''} onChange={v => set(key, v)} rows={5} readOnly={!student} placeholder="เขียนจากงานที่ทำจริง โดยไม่ใส่ข้อมูลลับของบริษัท" />)}</div>)}{student && <button className="primary" onClick={() => action(async () => { const latest = await request('/data'); return post('/internship', { ...latest.internship, report: draft.report }, 'PUT') }, 'บันทึกเนื้อหารายงานแล้ว')}>บันทึกรายงาน</button>}</section></div>
+  return <div className="stack"><section className="card" data-tour="report"><div className="section-head"><div><p className="eyebrow">รายงานส่งอาจารย์</p><h2>เขียนเนื้อหารายงาน</h2></div></div><p className="info-box">โครงบทอ้างอิงจากรายงานตัวอย่างของอาจารย์ เนื้อหาทุกช่องเป็นข้อมูลฝึกงานของคุณ ระบบจะนำวันและชั่วโมงไปสรุปในภาคผนวก</p>{reportFields.map(([group, fields]) => <div className="report-group" key={group}><h3>{group}</h3>{fields.map(([key, label]) => <React.Fragment key={key}><TextArea label={label} value={report[key] || ''} onChange={v => set(key, v)} rows={5} readOnly={!student} placeholder="เขียนจากงานที่ทำจริง โดยไม่ใส่ข้อมูลลับของบริษัท" />{student && ai && <AiAssist label="ร่างด้วย AI จากบันทึก" run={() => post('/ai/report', { key })} onApply={(text, mode) => set(key, mode === 'append' && (report[key] || '').trim() ? report[key].trimEnd() + '\n\n' + text : text)} modes={[['replace', 'แทนที่'], ['append', 'ต่อท้าย']]} disabled={!(data.logs || []).length} hint="ต้องมีบันทึกรายวันก่อน" />}</React.Fragment>)}</div>)}{student && <button className="primary" onClick={() => action(async () => { const latest = await request('/data'); return post('/internship', { ...latest.internship, report: draft.report }, 'PUT') }, 'บันทึกเนื้อหารายงานแล้ว')}>บันทึกรายงาน</button>}</section></div>
 }
 
 function Documents({ data, student, go }) {

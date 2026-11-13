@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -710,9 +711,22 @@ func makePDFHTML(documentHTML string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	fileURL := "file:///" + strings.ReplaceAll(htmlPath, "\\", "/")
-	cmd := exec.CommandContext(ctx, browser, "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check", "--no-pdf-header-footer", "--user-data-dir="+filepath.Join(dir, "profile"), "--print-to-pdf="+pdfPath, fileURL)
-	if out, e := cmd.CombinedOutput(); e != nil {
-		return nil, fmt.Errorf("แปลง PDF ไม่สำเร็จ: %s", strings.TrimSpace(string(out)))
+	args := []string{"--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check", "--no-pdf-header-footer", "--user-data-dir=" + filepath.Join(dir, "profile"), "--print-to-pdf=" + pdfPath}
+	if runtime.GOOS == "linux" {
+		// Containers usually run as root without a usable sandbox or a large /dev/shm.
+		args = append(args, "--no-sandbox", "--disable-dev-shm-usage")
+	}
+	cmd := exec.CommandContext(ctx, browser, append(args, fileURL)...)
+	out, e := cmd.CombinedOutput()
+	if e != nil {
+		detail := strings.TrimSpace(string(out))
+		if len(detail) > 400 {
+			detail = detail[len(detail)-400:]
+		}
+		return nil, fmt.Errorf("แปลง PDF ไม่สำเร็จ (%s): %v %s", browser, e, detail)
+	}
+	if info, statErr := os.Stat(pdfPath); statErr != nil || info.Size() == 0 {
+		return nil, fmt.Errorf("แปลง PDF ไม่สำเร็จ (%s): ไม่มีไฟล์ PDF ออกมา %s", browser, strings.TrimSpace(string(out)))
 	}
 	return os.ReadFile(pdfPath)
 }
