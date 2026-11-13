@@ -175,6 +175,8 @@ func main() {
 	api.Post("/ai/polish", aiPolish)
 	api.Post("/ai/report", aiReport)
 	api.Post("/ai/weekly", aiWeekly)
+	api.Post("/ai/review-report", aiReviewReport)
+	api.Post("/ai/approval-summary", aiApprovalSummary)
 
 	webDist := getenv("WEB_DIST", "../web/dist")
 	if info, e := os.Stat(webDist); e == nil && info.IsDir() {
