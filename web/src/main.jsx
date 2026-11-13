@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Toaster, toast } from 'react-hot-toast'
-import { LayoutDashboard, UserRound, CalendarDays, BadgeCheck, ClipboardCheck, BookOpenText, Files, LogOut, ChevronRight, Plus, ArrowUpRight, Download, Clock3, CheckCircle2, FileText, FileUp, ImagePlus, Copy, ListChecks, Building2, Eye, X, CircleHelp, Sparkles, BellRing, TriangleAlert } from 'lucide-react'
+import { LayoutDashboard, UserRound, CalendarDays, BadgeCheck, ClipboardCheck, BookOpenText, Files, LogOut, ChevronRight, Plus, ArrowUpRight, Download, Clock3, CheckCircle2, FileText, FileUp, ImagePlus, Copy, ListChecks, Building2, Eye, X, CircleHelp, Sparkles, BellRing, TriangleAlert, ChevronLeft } from 'lucide-react'
 import { calculatePlan, missingLogDates } from './plan.js'
 import { provinces } from './provinces.js'
 import { validateProfile, validateInternship, validateLog, validateApproval } from './validation.js'
@@ -214,6 +214,10 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState('overview')
   const [touring, setTouring] = useState(false)
+  const [collapsed, setCollapsed] = useState(() => { try { return localStorage.getItem('sidebar-collapsed') === '1' } catch { return false } })
+  function toggleSidebar() {
+    setCollapsed(v => { try { localStorage.setItem('sidebar-collapsed', v ? '0' : '1') } catch {}; return !v })
+  }
   const [ai, setAi] = useState(false)
   const [logDate, setLogDate] = useState('')
   const [notify, setNotify] = useState(() => { try { return localStorage.getItem('log-reminder') === 'on' } catch { return false } })
@@ -292,11 +296,16 @@ function App() {
     ['documents', 'เอกสาร', Files],
   ].filter(([key]) => student ? key !== 'evaluation' : key !== 'report' && key !== 'documents')
   const headings = Object.fromEntries(tabs.map(([key, label]) => [key, label]))
+  const groupKeys = student
+    ? [['ภาพรวม', ['overview']], ['การฝึกงาน', ['profile', 'logs', 'approvals']], ['รายงานและเอกสาร', ['report', 'documents']]]
+    : [['ภาพรวม', ['overview']], ['นักศึกษาที่ดูแล', ['logs', 'approvals', 'evaluation']], ['บัญชี', ['profile']]]
+  const navGroups = groupKeys.map(([title, keys]) => [title, tabs.filter(([key]) => keys.includes(key))]).filter(([, items]) => items.length)
   return <div className="app-shell">
-    <aside className="sidebar">
-      <div className="brand"><img className="brand-logo" src="/brand-mark.svg" alt="" /><div><strong>สมุดฝึกงาน</strong><small>ระบบบันทึกการฝึกงาน</small></div></div>
-      <nav aria-label="เมนูหลัก" data-tour="nav">{tabs.map(([key, label, Icon]) => <button key={key} className={tab === key ? 'active' : ''} aria-current={tab === key ? 'page' : undefined} onClick={() => setTab(key)}><Icon size={17} strokeWidth={1.8} aria-hidden="true" /><span>{label}</span></button>)}</nav>
-      <div className="sidebar-footer"><div className="avatar">{data.user.name?.slice(0, 1) || '?'}</div><div><strong>{data.user.name}</strong><small>{student ? 'นักศึกษา' : 'พี่เลี้ยง'}</small></div><button aria-label="ออกจากระบบ" title="ออกจากระบบ" onClick={signout}><LogOut size={17} aria-hidden="true" /></button></div>
+    <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
+      <div className="brand"><img className="brand-logo" src="/brand-mark.svg" alt="" /><strong>สมุดฝึกงาน</strong><button type="button" className="collapse-button" aria-label={collapsed ? 'ขยายเมนู' : 'ย่อเมนู'} title={collapsed ? 'ขยายเมนู' : 'ย่อเมนู'} onClick={toggleSidebar}><ChevronLeft size={16} aria-hidden="true" /></button></div>
+      <nav aria-label="เมนูหลัก" data-tour="nav">{navGroups.map(([title, items]) => <div className="nav-group" key={title}><p className="nav-group-title">{title}</p>{items.map(([key, label, Icon]) => <button key={key} className={tab === key ? 'active' : ''} aria-current={tab === key ? 'page' : undefined} title={collapsed ? label : undefined} onClick={() => setTab(key)}><Icon size={18} strokeWidth={1.9} aria-hidden="true" /><span>{label}</span></button>)}</div>)}</nav>
+      <div className="sidebar-footer"><div className="avatar">{data.user.name?.slice(0, 1) || '?'}</div><div className="sidebar-user"><strong>{data.user.name}</strong><small>{student ? 'นักศึกษา' : 'พี่เลี้ยง'}</small></div><button aria-label="ออกจากระบบ" title="ออกจากระบบ" onClick={signout}><LogOut size={17} aria-hidden="true" /></button></div>
+      <p className="sidebar-copy">© 2026 สมุดฝึกงาน · มรภ.นครปฐม</p>
     </aside>
     <div className="main-shell">
       <header className="topbar">

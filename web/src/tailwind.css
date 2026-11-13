@@ -19,20 +19,38 @@
   .loading { @apply grid min-h-screen place-items-center text-blue-900; }
 
   .app-shell { @apply flex min-h-screen; }
-  .sidebar { @apply sticky top-0 flex h-screen w-[235px] shrink-0 flex-col border-r border-slate-200 bg-white py-5; }
-  .brand { @apply flex items-center gap-3 border-b border-slate-200 px-6 pb-6; }
-  .brand-logo { @apply block h-10 w-10 shrink-0; }
-  .brand strong { @apply block text-base leading-tight font-semibold; }
-  .brand small { @apply mt-1 block text-[10px] text-slate-400; }
-  .sidebar nav { @apply flex flex-col gap-1 px-3 py-6; }
-  .sidebar nav button { @apply flex items-center gap-3 border-0 bg-transparent px-4 py-2.5 text-left text-[13px] font-medium text-slate-600 hover:bg-slate-100 hover:text-blue-950; }
-  .sidebar nav button svg { @apply shrink-0 text-slate-400; }
-  .sidebar nav button.active { @apply border-l-[3px] border-blue-800 bg-blue-50 font-semibold text-blue-950; }
-  .sidebar nav button.active svg { @apply text-blue-800; }
-  .sidebar-footer { @apply mx-4 mt-auto flex items-center gap-2 border-t border-slate-200 px-2 pt-4; }
-  .sidebar-footer strong { @apply block max-w-[115px] truncate text-[11px]; }
+  .sidebar { @apply sticky top-0 flex h-screen w-[260px] shrink-0 flex-col border-r border-slate-200 bg-white pt-4 transition-[width] duration-200; }
+  .brand { @apply flex items-center gap-3 px-4 pb-3; }
+  .brand-logo { @apply block h-11 w-11 shrink-0 rounded-xl; }
+  .brand strong { @apply truncate text-lg leading-tight font-bold tracking-wide text-slate-800; }
+  .collapse-button { @apply ml-auto grid h-8 w-8 shrink-0 place-items-center rounded-full border-0 bg-slate-100 p-0 text-slate-500 hover:bg-slate-200 hover:text-slate-800; }
+  .collapse-button svg { @apply transition-transform duration-200; }
+  .sidebar nav { @apply flex min-h-0 flex-1 flex-col overflow-y-auto px-3 pb-3; }
+  .nav-group { @apply flex flex-col gap-1; }
+  .nav-group-title { @apply px-2 pt-5 pb-2 text-[11px] font-semibold tracking-[0.14em] whitespace-nowrap text-slate-500 uppercase; }
+  .sidebar nav button { @apply flex w-full items-center gap-3.5 rounded-xl border-0 bg-transparent px-4 py-2.5 text-left text-[14px] font-medium text-slate-700 hover:bg-slate-100 hover:text-slate-900; }
+  .sidebar nav button span { @apply truncate; }
+  .sidebar nav button svg { @apply shrink-0 text-slate-500; }
+  .sidebar nav button.active { @apply bg-[#34495e] font-semibold text-white shadow-md shadow-slate-900/20 hover:bg-[#34495e] hover:text-white; }
+  .sidebar nav button.active svg { @apply text-white; }
+  .sidebar-footer { @apply mx-3 flex items-center gap-2 border-t border-slate-200 px-2 py-3; }
+  .sidebar-footer strong { @apply block max-w-[140px] truncate text-[12px]; }
   .sidebar-footer small { @apply block text-[10px] text-slate-400; }
   .sidebar-footer button { @apply ml-auto grid place-items-center border-0 bg-transparent p-1.5 text-slate-500; }
+  .sidebar-copy { @apply border-t border-slate-200 py-3 text-center text-[11px] whitespace-nowrap text-slate-500; }
+  .sidebar.collapsed { @apply w-[76px]; }
+  .sidebar.collapsed .brand { @apply flex-col gap-2 px-0; }
+  .sidebar.collapsed .brand strong { @apply hidden; }
+  .sidebar.collapsed .collapse-button { @apply ml-0; }
+  .sidebar.collapsed .collapse-button svg { @apply rotate-180; }
+  .sidebar.collapsed nav { @apply px-2.5; }
+  .sidebar.collapsed .nav-group-title { @apply mx-2 mt-3 mb-1 h-px overflow-hidden bg-slate-200 p-0 text-transparent; }
+  .sidebar.collapsed nav button { @apply justify-center px-0; }
+  .sidebar.collapsed nav button span { @apply sr-only; }
+  .sidebar.collapsed .sidebar-footer { @apply mx-2 flex-col px-0; }
+  .sidebar.collapsed .sidebar-user { @apply hidden; }
+  .sidebar.collapsed .sidebar-footer button { @apply ml-0; }
+  .sidebar.collapsed .sidebar-copy { @apply text-[0px] after:text-[10px] after:content-['©_2026']; }
   .avatar { @apply grid h-8 w-8 shrink-0 place-items-center rounded-full bg-blue-100 font-semibold text-blue-900; }
   .avatar.small { @apply h-8 w-8; }
   .main-shell { @apply min-w-0 flex-1; }
@@ -187,14 +205,6 @@
 }
 
 @layer components {
-  .sidebar { @apply w-[248px] border-r-0 bg-slate-950 text-slate-100; }
-  .brand { @apply border-slate-800; }
-  .brand small { @apply text-slate-400; }
-  .sidebar nav button { @apply h-9 rounded-md text-slate-300 hover:bg-slate-800 hover:text-white; }
-  .sidebar nav button.active { @apply border-l-0 bg-blue-600 text-white; }
-  .sidebar nav button.active svg { @apply text-white; }
-  .sidebar-footer { @apply border-slate-800; }
-  .sidebar-footer button { @apply text-slate-400 hover:text-white; }
   .topbar { @apply h-24 border-slate-200 bg-slate-50; }
   .topbar-title h1 { @apply text-[25px] text-slate-950; }
   .content { @apply max-w-[1440px] pt-7; }
@@ -224,13 +234,18 @@
 
 @media (max-width: 780px) {
   .app-shell { @apply block; }
-  .sidebar { @apply relative h-auto w-full py-3; }
-  .brand { @apply px-5 pb-3; }
+  .sidebar, .sidebar.collapsed { @apply relative h-auto w-full py-3; }
+  .brand, .sidebar.collapsed .brand { @apply flex-row px-5 pb-2; }
+  .sidebar.collapsed .brand strong { @apply block; }
   .brand-logo { @apply h-9 w-9; }
-  .sidebar nav { @apply flex-row flex-wrap gap-1 overflow-visible px-3 pt-2 pb-0; }
-  .sidebar nav button { @apply gap-1.5 px-2.5 py-2 text-[11px] whitespace-nowrap; }
+  .collapse-button { @apply hidden; }
+  .sidebar nav, .sidebar.collapsed nav { @apply flex-row flex-wrap gap-1 overflow-visible px-3 pt-2 pb-0; }
+  .nav-group { @apply contents; }
+  .nav-group-title { @apply hidden; }
+  .sidebar nav button, .sidebar.collapsed nav button { @apply w-auto gap-1.5 px-2.5 py-2 text-[11px] whitespace-nowrap; }
+  .sidebar.collapsed nav button span { @apply not-sr-only; }
   .sidebar nav button svg { @apply h-3.5 w-3.5; }
-  .sidebar-footer { @apply hidden; }
+  .sidebar-footer, .sidebar-copy { @apply hidden; }
   .topbar { @apply h-[72px] px-5; }
   .topbar-title h1 { @apply text-xl; }
   .topbar-right .pill { @apply hidden; }
