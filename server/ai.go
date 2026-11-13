@@ -15,9 +15,12 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// AI helpers backed by the Ollama chat API (Ollama Cloud by default).
-// Env: OLLAMA_API_KEY (required to enable), OLLAMA_HOST (default https://ollama.com),
-// OLLAMA_MODEL (default kimi-k2.6).
+// AI helpers. Two providers:
+//   - Typhoon / any OpenAI-compatible API (AI_PROVIDER=typhoon or openai):
+//       AI_API_KEY (required), AI_BASE_URL (default https://api.opentyphoon.ai/v1),
+//       AI_MODEL (default typhoon-v2.5-30b-a3b-instruct)
+//   - Ollama native /api/chat (default when AI_PROVIDER is empty or "ollama"):
+//       OLLAMA_API_KEY (required), OLLAMA_HOST (default https://ollama.com), OLLAMA_MODEL (default kimi-k2.6)
 
 const aiSystemPrompt = `คุณเป็นผู้ช่วยเขียนเอกสารฝึกงานของนักศึกษามหาวิทยาลัยในประเทศไทย
 - เขียนเป็นภาษาไทยแบบทางการ กระชับ อ่านง่าย คำศัพท์เทคนิคใช้ภาษาอังกฤษได้
@@ -25,17 +28,53 @@ const aiSystemPrompt = `คุณเป็นผู้ช่วยเขีย�
 - ห้ามใส่ข้อมูลลับของบริษัท รหัสผ่าน หรือข้อมูลส่วนบุคคลของผู้อื่น
 - ตอบเฉพาะเนื้อหาที่ขอ ไม่ต้องมีคำนำ คำอธิบาย หรือหัวข้อ Markdown`
 
-func aiEnabled() bool { return strings.TrimSpace(os.Getenv("OLLAMA_API_KEY")) != "" }
+func env(key string) string { return strings.TrimSpace(os.Getenv(key)) }
+
+func aiProvider() string {
+	switch strings.ToLower(env("AI_PROVIDER")) {
+	case "typhoon", "openai":
+		return "openai"
+	default:
+		return "ollama"
+	}
+}
+
+func aiKey() string {
+	if aiProvider() == "openai" {
+		return env("AI_API_KEY")
+	}
+	if k := env("OLLAMA_API_KEY"); k != "" {
+		return k
+	}
+	return env("AI_API_KEY")
+}
+
+func aiEnabled() bool { return aiKey() != "" }
 
 func aiHost() string {
-	if h := strings.TrimRight(strings.TrimSpace(os.Getenv("OLLAMA_HOST")), "/"); h != "" {
+	if aiProvider() == "openai" {
+		if h := strings.TrimRight(env("AI_BASE_URL"), "/"); h != "" {
+			return h
+		}
+		return "https://api.opentyphoon.ai/v1"
+	}
+	if h := strings.TrimRight(env("OLLAMA_HOST"), "/"); h != "" {
 		return h
 	}
 	return "https://ollama.com"
 }
 
 func aiModel() string {
-	if m := strings.TrimSpace(os.Getenv("OLLAMA_MODEL")); m != "" {
+	if aiProvider() == "openai" {
+		if m := env("AI_MODEL"); m != "" {
+			return m
+		}
+		return "typhoon-v2.5-30b-a3b-instruct"
+	}
+	if m := env("OLLAMA_MODEL"); m != "" {
+		return m
+	}
+	if m := env("AI_MODEL"); m != "" {
 		return m
 	}
 	return "kimi-k2.6"
@@ -43,19 +82,25 @@ func aiModel() string {
 
 var aiClient = &http.Client{Timeout: 120 * time.Second}
 
-func ollamaChat(ctx context.Context, user string) (string, error) {
-	body, _ := json.Marshal(map[string]any{
-		"model":    aiModel(),
-		"stream":   false,
-		"messages": []map[string]string{{"role": "system", "content": aiSystemPrompt}, {"role": "user", "content": user}},
-		"options":  map[string]any{"temperature": 0.4},
-	})
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, aiHost()+"/api/chat", bytes.NewReader(body))
+// aiChat sends one system+user turn to the configured provider and returns the reply text.
+func aiChat(ctx context.Context, user string) (string, error) {
+	messages := []map[string]string{{"role": "system", "content": aiSystemPrompt}, {"role": "user", "content": user}}
+	var url string
+	var payload map[string]any
+	if aiProvider() == "openai" {
+		url = aiHost() + "/chat/completions"
+		payload = map[string]any{"model": aiModel(), "messages": messages, "temperature": 0.4, "max_tokens": 2048, "stream": false}
+	} else {
+		url = aiHost() + "/api/chat"
+		payload = map[string]any{"model": aiModel(), "messages": messages, "stream": false, "options": map[string]any{"temperature": 0.4}}
+	}
+	body, _ := json.Marshal(payload)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(os.Getenv("OLLAMA_API_KEY")))
+	req.Header.Set("Authorization", "Bearer "+aiKey())
 	resp, err := aiClient.Do(req)
 	if err != nil {
 		return "", err
@@ -63,31 +108,53 @@ func ollamaChat(ctx context.Context, user string) (string, error) {
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 	if resp.StatusCode != http.StatusOK {
-		msg := strings.TrimSpace(string(raw))
-		var e struct {
-			Error string `json:"error"`
-		}
-		if json.Unmarshal(raw, &e) == nil && e.Error != "" {
-			msg = e.Error
-		}
-		if len(msg) > 300 {
-			msg = msg[:300]
-		}
-		return "", fmt.Errorf("Ollama ตอบกลับ %d: %s", resp.StatusCode, msg)
+		return "", fmt.Errorf("AI ตอบกลับ %d: %s", resp.StatusCode, apiErrorMessage(raw))
 	}
 	var out struct {
 		Message struct {
 			Content string `json:"content"`
 		} `json:"message"`
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
 	}
 	if err = json.Unmarshal(raw, &out); err != nil {
-		return "", fmt.Errorf("อ่านคำตอบจาก Ollama ไม่ได้")
+		return "", fmt.Errorf("อ่านคำตอบจาก AI ไม่ได้")
 	}
-	text := strings.TrimSpace(stripThinking(out.Message.Content))
+	content := out.Message.Content
+	if len(out.Choices) > 0 {
+		content = out.Choices[0].Message.Content
+	}
+	text := strings.TrimSpace(stripThinking(content))
 	if text == "" {
 		return "", fmt.Errorf("AI ไม่ได้ส่งข้อความกลับมา")
 	}
 	return text, nil
+}
+
+// apiErrorMessage pulls a readable message out of {"error":"..."} or {"error":{"message":"..."}}.
+func apiErrorMessage(raw []byte) string {
+	var e struct {
+		Error json.RawMessage `json:"error"`
+	}
+	msg := strings.TrimSpace(string(raw))
+	if json.Unmarshal(raw, &e) == nil && len(e.Error) > 0 {
+		var asString string
+		var asObject struct {
+			Message string `json:"message"`
+		}
+		if json.Unmarshal(e.Error, &asString) == nil && asString != "" {
+			msg = asString
+		} else if json.Unmarshal(e.Error, &asObject) == nil && asObject.Message != "" {
+			msg = asObject.Message
+		}
+	}
+	if len(msg) > 300 {
+		msg = msg[:300]
+	}
+	return msg
 }
 
 // stripThinking drops <think>…</think> blocks some reasoning models include in content.
@@ -131,14 +198,14 @@ func aiAllow(userID int64) bool {
 }
 
 func aiStatus(c *fiber.Ctx) error {
-	return c.JSON(fiber.Map{"enabled": aiEnabled(), "model": aiModel()})
+	return c.JSON(fiber.Map{"enabled": aiEnabled(), "provider": aiProvider(), "model": aiModel()})
 }
 
 // aiGuard checks the feature is on and the caller is a student under the rate limit.
 func aiGuard(c *fiber.Ctx) (User, *Internship, error) {
 	u := current(c)
 	if !aiEnabled() {
-		return u, nil, fail(c, 503, "ยังไม่ได้ตั้งค่า AI (OLLAMA_API_KEY)")
+		return u, nil, fail(c, 503, "ยังไม่ได้ตั้งค่า AI (AI_API_KEY)")
 	}
 	if u.Role != "student" {
 		return u, nil, fail(c, 403, "เฉพาะนักศึกษา")
@@ -156,7 +223,7 @@ func aiGuard(c *fiber.Ctx) (User, *Internship, error) {
 func runAI(c *fiber.Ctx, prompt string) error {
 	ctx, cancel := context.WithTimeout(c.Context(), 110*time.Second)
 	defer cancel()
-	text, err := ollamaChat(ctx, prompt)
+	text, err := aiChat(ctx, prompt)
 	if err != nil {
 		return fail(c, 502, "AI ทำงานไม่สำเร็จ: "+err.Error())
 	}
