@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Toaster, toast } from 'react-hot-toast'
-import { LayoutDashboard, UserRound, CalendarDays, BadgeCheck, ClipboardCheck, BookOpenText, Files, LogOut, ChevronRight, Plus, ArrowUpRight, Download, Clock3, CheckCircle2, FileText, FileUp, ImagePlus, Copy, ListChecks, Building2, Eye, X, CircleHelp, Sparkles, BellRing, TriangleAlert, ChevronLeft, Users, Search, RefreshCw, KeyRound, CircleAlert, Lightbulb } from 'lucide-react'
+import { LayoutDashboard, UserRound, CalendarDays, BadgeCheck, ClipboardCheck, BookOpenText, Files, LogOut, ChevronRight, Plus, ArrowUpRight, Download, Clock3, CheckCircle2, FileText, FileUp, ImagePlus, Copy, ListChecks, Building2, Eye, X, CircleHelp, Sparkles, BellRing, TriangleAlert, ChevronLeft, Users, Search, RefreshCw, KeyRound, CircleAlert, Lightbulb, Moon, Sun } from 'lucide-react'
 import { calculatePlan, missingLogDates } from './plan.js'
 import { provinces } from './provinces.js'
 import { validateProfile, validateInternship, validateLog, validateApproval } from './validation.js'
@@ -155,7 +155,7 @@ function AiAssist({ label = 'เกลาด้วย AI', run, onApply, modes =
   return <div className="-mt-1 mb-4">
     <button type="button" title={disabled ? hint : ''} className="inline-flex items-center gap-1.5 rounded-md border border-violet-200 bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-800 hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-50" onClick={generate} disabled={busy || disabled}><Sparkles size={13} aria-hidden="true" />{busy ? 'AI กำลังเขียน…' : label}</button>
     {disabled && hint && <span className="ml-2 text-[11px] text-slate-400">{hint}</span>}
-    {text && <div className="mt-2 rounded-lg border border-violet-200 bg-violet-50/60 p-3">
+    {text && <div className="anim-drop mt-2 rounded-lg border border-violet-200 bg-violet-50/60 p-3">
       <p className="mb-1.5 text-[11px] font-semibold text-violet-700">ข้อเสนอจาก AI · แก้ไขได้ก่อนใช้ ตรวจข้อเท็จจริงทุกครั้ง</p>
       <textarea className="w-full rounded-md border border-violet-200 bg-white p-2 text-sm leading-relaxed" value={text} onChange={e => setText(e.target.value)} rows={Math.min(14, text.split('\n').length + 1)} aria-label="ข้อความจาก AI" />
       <div className="mt-2 flex flex-wrap gap-2">{modes.map(([mode, modeLabel]) => <button key={mode} type="button" className="rounded-md bg-violet-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-800" onClick={() => { onApply(text, mode); setText('') }}>{modeLabel}</button>)}<button type="button" className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600" onClick={() => setText('')}>ไม่ใช้</button></div>
@@ -206,6 +206,33 @@ function ChangePassword() {
   </section>
 }
 
+// Theme: saved choice wins, otherwise follow the OS. index.html applies it before first paint.
+function savedTheme() { try { const t = localStorage.getItem('theme'); return t === 'light' || t === 'dark' ? t : null } catch { return null } }
+function useTheme() {
+  const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'))
+  useEffect(() => {
+    const media = window.matchMedia?.('(prefers-color-scheme: dark)')
+    if (!media) return
+    const follow = e => { if (!savedTheme()) apply(e.matches, false) }
+    media.addEventListener?.('change', follow)
+    return () => media.removeEventListener?.('change', follow)
+  }, [])
+  function apply(next, save = true) {
+    const root = document.documentElement
+    root.classList.add('theme-switching')
+    root.classList.toggle('dark', next)
+    setDark(next)
+    if (save) { try { localStorage.setItem('theme', next ? 'dark' : 'light') } catch {} }
+    setTimeout(() => root.classList.remove('theme-switching'), 350)
+  }
+  return [dark, () => apply(!dark)]
+}
+function ThemeToggle() {
+  const [dark, toggle] = useTheme()
+  const label = dark ? 'เปลี่ยนเป็นโหมดสว่าง' : 'เปลี่ยนเป็นโหมดมืด'
+  return <button type="button" className="theme-toggle" onClick={toggle} aria-label={label} title={label}>{dark ? <Sun size={16} aria-hidden="true" /> : <Moon size={16} aria-hidden="true" />}</button>
+}
+
 function Auth({ onAuth }) {
   const invite = location.pathname.startsWith('/invite/') ? location.pathname.split('/').pop() : ''
   const [mode, setMode] = useState(invite ? 'register' : 'login')
@@ -221,8 +248,8 @@ function Auth({ onAuth }) {
     try { await post('/auth/' + (mode === 'login' ? 'login' : 'register'), { email, password, name, invite }); history.replaceState({}, '', '/'); await onAuth(); toast.success('เข้าสู่ระบบแล้ว') }
     catch (e) { setError(e.message); toast.error(e.message) } finally { setBusy(false) }
   }
-  return <main className="auth-layout">
-    <div className="auth-panel">
+  return <main className="auth-layout"><div className="fixed top-4 right-4 z-10"><ThemeToggle /></div>
+    <div className="auth-panel keep-light">
       <div className="auth-brand"><img className="brand-logo" src="/brand-mark.svg" alt="" /><strong>สมุดฝึกงาน</strong></div>
       <div className="auth-editorial"><span className="kicker">บันทึก / รับรอง / ส่งรายงาน</span><h1>ทุกวันที่ฝึกงาน<br />อยู่ในที่เดียว</h1><p>จดงานที่ทำ เก็บเวลาให้ครบ และเตรียมเอกสารจากข้อมูลจริงของคุณ</p></div>
       <div className="auth-steps"><span>01&nbsp; บันทึกประจำวัน</span><span>02&nbsp; พี่เลี้ยงรับรอง</span><span>03&nbsp; ส่งออกเอกสาร</span></div>
@@ -239,7 +266,7 @@ function SignedInInvite({ user, onSignout, onBack }) {
   const [info, setInfo] = useState(null)
   const [error, setError] = useState('')
   useEffect(() => { request('/invite/' + token).then(setInfo).catch(e => setError(e.message)) }, [token])
-  return <main className="auth-layout"><div className="auth-panel"><div className="auth-brand"><img className="brand-logo" src="/brand-mark.svg" alt="" /><strong>สมุดฝึกงาน</strong></div><div className="auth-editorial"><span className="kicker">คำเชิญพี่เลี้ยง</span><h1>ลิงก์เชิญพี่เลี้ยง</h1><p>ลิงก์นี้ใช้สมัครบัญชีพี่เลี้ยงเพื่อดูแลการฝึกงาน</p></div></div><section className="auth-card"><p className="eyebrow">ตรวจคำเชิญ</p><h2>{error ? 'ลิงก์ใช้ไม่ได้' : info ? 'กำลังเข้าสู่ระบบอยู่' : 'กำลังตรวจลิงก์…'}</h2>{error ? <p className="error">{error}</p> : info && <><p className="muted">คำเชิญสำหรับ {info.email} เพื่อดูแล {info.student}</p><p className="mt-4 text-sm text-slate-700">บัญชีปัจจุบัน: {user.name} ({user.role === 'student' ? 'นักศึกษา' : 'พี่เลี้ยง'}) หากพี่เลี้ยงจะรับคำเชิญ ให้เปิดลิงก์ในหน้าต่างส่วนตัว หรือออกจากบัญชีนี้ก่อน ระบบจะเก็บลิงก์ไว้บนหน้านี้</p><button className="primary full mt-5" onClick={onSignout}>ออกจากระบบเพื่อรับคำเชิญ</button></>}<button className="text-button mt-4" onClick={onBack}>กลับไปสมุดฝึกงาน</button></section></main>
+  return <main className="auth-layout"><div className="fixed top-4 right-4 z-10"><ThemeToggle /></div><div className="auth-panel keep-light"><div className="auth-brand"><img className="brand-logo" src="/brand-mark.svg" alt="" /><strong>สมุดฝึกงาน</strong></div><div className="auth-editorial"><span className="kicker">คำเชิญพี่เลี้ยง</span><h1>ลิงก์เชิญพี่เลี้ยง</h1><p>ลิงก์นี้ใช้สมัครบัญชีพี่เลี้ยงเพื่อดูแลการฝึกงาน</p></div></div><section className="auth-card"><p className="eyebrow">ตรวจคำเชิญ</p><h2>{error ? 'ลิงก์ใช้ไม่ได้' : info ? 'กำลังเข้าสู่ระบบอยู่' : 'กำลังตรวจลิงก์…'}</h2>{error ? <p className="error">{error}</p> : info && <><p className="muted">คำเชิญสำหรับ {info.email} เพื่อดูแล {info.student}</p><p className="mt-4 text-sm text-slate-700">บัญชีปัจจุบัน: {user.name} ({user.role === 'student' ? 'นักศึกษา' : 'พี่เลี้ยง'}) หากพี่เลี้ยงจะรับคำเชิญ ให้เปิดลิงก์ในหน้าต่างส่วนตัว หรือออกจากบัญชีนี้ก่อน ระบบจะเก็บลิงก์ไว้บนหน้านี้</p><button className="primary full mt-5" onClick={onSignout}>ออกจากระบบเพื่อรับคำเชิญ</button></>}<button className="text-button mt-4" onClick={onBack}>กลับไปสมุดฝึกงาน</button></section></main>
 }
 
 function App() {
@@ -346,9 +373,9 @@ function App() {
     <div className="main-shell">
       <header className="topbar">
         <div className="topbar-title"><nav className="breadcrumb" aria-label="เส้นทางการนำทาง"><button onClick={() => setTab('overview')}>สมุดฝึกงาน</button><ChevronRight size={13} aria-hidden="true" /><span aria-current="page">{headings[tab]}</span></nav><h1>{headings[tab]}</h1></div>
-        <div className="topbar-right">{student && <button type="button" data-tour="tour-button" className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-blue-900 hover:bg-slate-50" onClick={() => setTouring(true)}><CircleHelp size={15} aria-hidden="true" />คู่มือ</button>}<span className="pill"><Building2 size={14} aria-hidden="true" />{data.internship?.company || 'ยังไม่ระบุบริษัท'}</span><Avatar user={data.user} version={avatarVersion} className="avatar small" title={data.user.name} /></div>
+        <div className="topbar-right"><ThemeToggle />{student && <button type="button" data-tour="tour-button" className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-blue-900 hover:bg-slate-50" onClick={() => setTouring(true)}><CircleHelp size={15} aria-hidden="true" />คู่มือ</button>}<span className="pill"><Building2 size={14} aria-hidden="true" />{data.internship?.company || 'ยังไม่ระบุบริษัท'}</span><Avatar user={data.user} version={avatarVersion} className="avatar small" title={data.user.name} /></div>
       </header>
-      <main className="content">{tab === 'overview' && <Overview data={data} student={student} go={setTab} startLog={startLog} notify={notify} toggleNotify={toggleNotify} />}{tab === 'profile' && <Profile data={data} student={student} action={action} refresh={load} avatarVersion={avatarVersion} onPhotoChanged={() => setAvatarVersion(Date.now())} />}{tab === 'logs' && <Logs data={data} student={student} action={action} ai={ai} initialDate={logDate} onDateUsed={() => setLogDate('')} />}{tab === 'approvals' && <Approvals data={data} student={student} action={action} ai={ai} />}{tab === 'evaluation' && !student && <Evaluation data={data} student={student} action={action} />}{tab === 'report' && student && <Report data={data} student={student} action={action} ai={ai} />}{tab === 'documents' && student && <Documents data={data} student={student} go={setTab} />}{tab === 'admin' && data.user.is_admin && <AdminUsers me={data.user} />}</main>
+      <main className="content"><div key={tab} className="page-enter">{tab === 'overview' && <Overview data={data} student={student} go={setTab} startLog={startLog} notify={notify} toggleNotify={toggleNotify} />}{tab === 'profile' && <Profile data={data} student={student} action={action} refresh={load} avatarVersion={avatarVersion} onPhotoChanged={() => setAvatarVersion(Date.now())} />}{tab === 'logs' && <Logs data={data} student={student} action={action} ai={ai} initialDate={logDate} onDateUsed={() => setLogDate('')} />}{tab === 'approvals' && <Approvals data={data} student={student} action={action} ai={ai} />}{tab === 'evaluation' && !student && <Evaluation data={data} student={student} action={action} />}{tab === 'report' && student && <Report data={data} student={student} action={action} ai={ai} />}{tab === 'documents' && student && <Documents data={data} student={student} go={setTab} />}{tab === 'admin' && data.user.is_admin && <AdminUsers me={data.user} />}</div></main>
     </div>
     {touring && student && <Tour steps={studentTour} go={setTab} onClose={closeTour} />}
   </div>
@@ -436,8 +463,8 @@ function Tour({ steps, go, onClose }) {
   return <div className="fixed inset-0 z-[60]" role="dialog" aria-modal="true" aria-label="คู่มือการใช้งาน">
     {hole
       ? <div className="pointer-events-none fixed rounded-xl ring-2 ring-blue-500 transition-all duration-300" style={{ left: hole.left, top: hole.top, width: hole.right - hole.left, height: hole.bottom - hole.top, boxShadow: '0 0 0 9999px rgba(2, 6, 23, 0.6)' }} />
-      : <div className="fixed inset-0 bg-slate-950/60" />}
-    <div className="fixed flex flex-col rounded-2xl bg-white p-5 shadow-2xl transition-all duration-300" style={{ ...cardStyle, minHeight: cardHeight - 40 }}>
+      : <div className="backdrop anim-fade fixed inset-0" />}
+    <div key={index} className="anim-pop fixed flex flex-col rounded-2xl bg-white p-5 shadow-2xl transition-all duration-300" style={{ ...cardStyle, minHeight: cardHeight - 40 }}>
       <div className="mb-2 flex items-center justify-between"><span className="text-[11px] font-semibold tracking-widest text-blue-700">ขั้นตอน {index + 1} / {steps.length}</span><button type="button" aria-label="ปิดคู่มือ" className="grid place-items-center rounded-md p-1 text-slate-500 hover:bg-slate-100" onClick={onClose}><X size={16} aria-hidden="true" /></button></div>
       <h3 className="text-base font-semibold text-blue-950">{step.title}</h3>
       <p className="mt-2 text-sm leading-relaxed text-slate-600">{step.body}</p>
@@ -473,7 +500,7 @@ function Overview({ data, student, go, startLog, notify, toggleNotify }) {
   ].filter(Boolean)
   return <div className="dashboard">
     <section className="overview-intro"><div><p className="date-overline">{today}</p><h2>สวัสดี, {firstName}</h2><p>{student ? 'วันนี้มีอะไรที่ต้องบันทึกไว้บ้าง' : `กำลังดูแลการฝึกงานที่ ${data.internship?.company || 'สถานประกอบการ'}`}</p></div><button className="primary" onClick={() => go('logs')}>{student && <Plus size={17} aria-hidden="true" />}{student ? 'บันทึกงาน' : 'ดูบันทึกนักศึกษา'}</button></section>
-    {student && (missed.length > 0 || todayMissing) && <section className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 sm:flex-row sm:items-start sm:justify-between" role="alert" data-tour="reminder">
+    {student && (missed.length > 0 || todayMissing) && <section className="anim-drop flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 sm:flex-row sm:items-start sm:justify-between" role="alert" data-tour="reminder">
       <div className="flex gap-2.5"><TriangleAlert size={18} className="mt-0.5 shrink-0" aria-hidden="true" /><div>
         <strong className="block">{missed.length ? `ลืมบันทึก ${missed.length} วันทำงาน` : 'วันนี้ยังไม่ได้บันทึกงาน'}</strong>
         {missed.length > 0 && <div className="mt-2 flex flex-wrap gap-1.5">{missed.slice(0, 8).map(d => <button key={d} type="button" className="rounded-full border border-amber-300 bg-white px-2.5 py-0.5 text-xs font-medium hover:bg-amber-100" onClick={() => startLog(d)}>{thaiShortDate(d)}</button>)}{missed.length > 8 && <span className="text-xs">และอีก {missed.length - 8} วัน</span>}</div>}
@@ -711,7 +738,7 @@ function WeeklySummary() {
       <Field label="ถึง" type="date" value={range.to} onChange={v => setRange(r => ({ ...r, to: v }))} />
       <button type="button" className="mb-4 inline-flex items-center gap-1.5 rounded-lg bg-violet-700 px-4 py-2 text-xs font-semibold text-white hover:bg-violet-800 disabled:opacity-50" onClick={generate} disabled={busy}><Sparkles size={14} aria-hidden="true" />{busy ? 'AI กำลังสรุป…' : 'สรุปด้วย AI'}</button>
     </div>
-    {text && <div className="mt-2"><textarea className="w-full rounded-md border border-violet-200 bg-violet-50/40 p-3 text-sm leading-relaxed" value={text} onChange={e => setText(e.target.value)} rows={Math.min(18, text.split('\n').length + 2)} aria-label="สรุปรายสัปดาห์" /><div className="mt-2 flex gap-2"><button type="button" className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold" onClick={copy}><Copy size={13} aria-hidden="true" />คัดลอก</button><button type="button" className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600" onClick={() => setText('')}>ล้าง</button></div></div>}
+    {text && <div className="anim-drop mt-2"><textarea className="w-full rounded-md border border-violet-200 bg-violet-50/40 p-3 text-sm leading-relaxed" value={text} onChange={e => setText(e.target.value)} rows={Math.min(18, text.split('\n').length + 2)} aria-label="สรุปรายสัปดาห์" /><div className="mt-2 flex gap-2"><button type="button" className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold" onClick={copy}><Copy size={13} aria-hidden="true" />คัดลอก</button><button type="button" className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600" onClick={() => setText('')}>ล้าง</button></div></div>}
   </section>
 }
 
@@ -774,7 +801,7 @@ function AdminUsers({ me }) {
         <label className="relative min-w-[220px] flex-1"><Search size={15} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-slate-400" aria-hidden="true" /><input className="w-full rounded-lg border border-slate-300 py-2 pr-3 pl-9 text-sm" placeholder="ค้นหาชื่อ อีเมล หรือบริษัท" value={query} onChange={e => setQuery(e.target.value)} aria-label="ค้นหาผู้ใช้" /></label>
         <div className="segmented">{[['all', 'ทั้งหมด'], ['student', 'นักศึกษา'], ['mentor', 'พี่เลี้ยง']].map(([key, label]) => <button key={key} type="button" className={role === key ? 'selected' : ''} onClick={() => setRole(key)}>{label}</button>)}</div>
       </div>
-      {resetResult && <div className="mb-4 flex flex-col gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 sm:flex-row sm:items-center sm:justify-between" role="status">
+      {resetResult && <div className="anim-drop mb-4 flex flex-col gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 sm:flex-row sm:items-center sm:justify-between" role="status">
         <div><strong className="block">รหัสผ่านชั่วคราวของ {resetResult.name || resetResult.email}</strong><span className="text-xs">ส่งให้เจ้าของบัญชี แล้วให้เปลี่ยนรหัสผ่านเองหลังเข้าสู่ระบบ · ข้อความนี้จะแสดงครั้งเดียว</span><div className="mt-1.5 font-mono text-base font-semibold tracking-wider" data-testid="temp-password">{resetResult.password}</div></div>
         <div className="flex shrink-0 gap-2"><button type="button" className="inline-flex items-center gap-1.5 rounded-md bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white" onClick={copyReset}><Copy size={13} aria-hidden="true" />คัดลอก</button><button type="button" className="rounded-md border border-emerald-300 bg-white px-3 py-1.5 text-xs font-semibold" onClick={() => setResetResult(null)}>ปิด</button></div>
       </div>}
@@ -866,7 +893,7 @@ function ReportReview({ report, ai }) {
       <div className="mb-3 flex flex-wrap gap-2 text-xs">{['error', 'warn', 'tip'].map(sev => <span key={sev} className={`rounded-full border px-2.5 py-0.5 font-semibold ${severityView[sev][1]}`}>{severityView[sev][0]} {count(sev)}</span>)}{result.ai_used && <span className="rounded-full border border-violet-200 bg-violet-50 px-2.5 py-0.5 font-semibold text-violet-800">AI ตรวจแล้ว</span>}</div>
       {result.ai_error && <p className="mb-3 text-xs text-amber-800">{result.ai_error}</p>}
       {!sorted.length && !empty.length ? <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">ไม่พบปัญหา พร้อมดาวน์โหลดไปส่งได้</p> :
-        <ul className="flex flex-col gap-2">{empty.length > 0 && <li className={`flex gap-2.5 rounded-lg border px-3 py-2 text-sm ${severityView.error[1]}`}><CircleAlert size={16} className="mt-0.5 shrink-0" aria-hidden="true" /><div className="min-w-0 flex-1"><div className="text-xs font-semibold">ต้องแก้ · ยังไม่ได้เขียน {empty.length} หัวข้อ</div><div className="mt-1.5 flex flex-wrap gap-1.5">{empty.map(i => <button key={i.key} type="button" className="rounded-full border border-red-200 bg-white px-2.5 py-0.5 text-xs font-medium text-red-800 hover:bg-red-100" onClick={() => jump(i.key)}>{i.label}</button>)}</div></div></li>}{sorted.map((issue, i) => { const [label, cls, Icon] = severityView[issue.severity] || severityView.warn; return <li key={i} className={`flex gap-2.5 rounded-lg border px-3 py-2 text-sm ${cls}`}><Icon size={16} className="mt-0.5 shrink-0" aria-hidden="true" /><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-x-2 text-xs font-semibold"><span>{label}</span>{issue.key !== 'general' ? <button type="button" className="border-0 bg-transparent p-0 text-xs font-semibold text-inherit underline underline-offset-2 shadow-none" onClick={() => jump(issue.key)}>{issue.label}</button> : <span>{issue.label}</span>}{issue.source === 'ai' && <span className="rounded bg-white/70 px-1 text-[10px] text-violet-700">AI</span>}</div><p className="mt-0.5 leading-relaxed">{issue.message}</p></div></li> })}</ul>}
+        <ul className="anim-list flex flex-col gap-2">{empty.length > 0 && <li className={`flex gap-2.5 rounded-lg border px-3 py-2 text-sm ${severityView.error[1]}`}><CircleAlert size={16} className="mt-0.5 shrink-0" aria-hidden="true" /><div className="min-w-0 flex-1"><div className="text-xs font-semibold">ต้องแก้ · ยังไม่ได้เขียน {empty.length} หัวข้อ</div><div className="mt-1.5 flex flex-wrap gap-1.5">{empty.map(i => <button key={i.key} type="button" className="rounded-full border border-red-200 bg-white px-2.5 py-0.5 text-xs font-medium text-red-800 hover:bg-red-100" onClick={() => jump(i.key)}>{i.label}</button>)}</div></div></li>}{sorted.map((issue, i) => { const [label, cls, Icon] = severityView[issue.severity] || severityView.warn; return <li key={i} className={`flex gap-2.5 rounded-lg border px-3 py-2 text-sm ${cls}`}><Icon size={16} className="mt-0.5 shrink-0" aria-hidden="true" /><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-x-2 text-xs font-semibold"><span>{label}</span>{issue.key !== 'general' ? <button type="button" className="border-0 bg-transparent p-0 text-xs font-semibold text-inherit underline underline-offset-2 shadow-none" onClick={() => jump(issue.key)}>{issue.label}</button> : <span>{issue.label}</span>}{issue.source === 'ai' && <span className="rounded bg-white/70 px-1 text-[10px] text-violet-700">AI</span>}</div><p className="mt-0.5 leading-relaxed">{issue.message}</p></div></li> })}</ul>}
       {result.ai_used && <p className="mt-3 text-[11px] text-slate-400">ผลจาก AI อาจผิดพลาดได้ ใช้เป็นข้อสังเกตประกอบการตรวจด้วยตัวเอง</p>}
     </>}
   </section>
@@ -885,7 +912,7 @@ function ApprovalSummary({ range, ai }) {
   const flags = result?.flags || []
   return <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/70 p-4" data-tour="approval-summary">
     <div className="flex flex-wrap items-center justify-between gap-2"><div><strong className="text-sm text-slate-900">ตรวจช่วงนี้ก่อนรับรอง</strong><p className="text-xs text-slate-500">{ai ? 'AI สรุปงานในช่วงที่เลือก และระบบชี้วันที่ควรตรวจเพิ่ม' : 'ระบบชี้วันที่ไม่มีบันทึก มาสาย หรือชั่วโมงผิดปกติ'}</p></div><button type="button" className="inline-flex items-center gap-1.5 rounded-lg border border-violet-300 bg-white px-3 py-1.5 text-xs font-semibold text-violet-800 hover:bg-violet-50 disabled:opacity-50" onClick={run} disabled={busy}>{ai ? <Sparkles size={13} aria-hidden="true" /> : <ListChecks size={13} aria-hidden="true" />}{busy ? 'กำลังสรุป…' : ai ? 'สรุปด้วย AI' : 'ตรวจช่วงนี้'}</button></div>
-    {result && <div className="mt-3 flex flex-col gap-3">
+    {result && <div className="anim-drop mt-3 flex flex-col gap-3">
       <p className="text-xs text-slate-600">บันทึก {result.log_count} วัน · รอรับรอง {result.pending_count} วัน</p>
       {result.ai_error && <p className="text-xs text-amber-800">{result.ai_error}</p>}
       {result.summary && <div className="whitespace-pre-wrap rounded-lg border border-violet-200 bg-white p-3 text-sm leading-relaxed text-slate-800" aria-label="สรุปจาก AI">{result.summary}</div>}
@@ -918,7 +945,7 @@ function Documents({ data, student, go }) {
     <div className="documents-intro"><p className="section-index">ไฟล์สำหรับส่งอาจารย์</p><h2>เอกสารของการฝึกงานครั้งนี้</h2><p>เปิดดูแบบร่างจากข้อมูลล่าสุดก่อนดาวน์โหลดได้ แม้จะยังกรอกไม่ครบ</p></div>
     <section className="card documents-list" data-tour="documents"><div className="doc-head"><span>เอกสาร</span><span>ดูตัวอย่างและดาวน์โหลด</span></div>{docs.map((d, i) => <div className="doc-row" key={d.kind}><span className="doc-number">{String(i + 1).padStart(2, '0')}</span><div className="doc-main"><div className="doc-title"><d.Icon size={18} strokeWidth={1.8} aria-hidden="true" /><h3>{d.title}</h3></div><p>{d.detail}</p></div><div className="doc-actions">{(!student || d.kind !== 'evaluation' || d.ready) && <button onClick={() => setPreview(d)}><Eye size={14} aria-hidden="true" />Preview</button>}{d.ready ? <><button onClick={() => downloadDocument(d.kind, 'docx')}><Download size={14} aria-hidden="true" />DOCX</button><button onClick={() => downloadDocument(d.kind, 'pdf')}><Download size={14} aria-hidden="true" />PDF</button></> : <span className="muted">รอพี่เลี้ยงส่งผล</span>}</div></div>)}</section>
     <div className="document-note"><strong>ตรวจข้อมูลก่อนส่ง</strong><span>ชื่อ มหาวิทยาลัย บริษัท และวันที่ใช้ข้อมูลจาก <button className="inline-link" onClick={() => go('profile')}>โปรไฟล์</button> ส่วนเนื้อหารายงานแก้ได้ใน <button className="inline-link" onClick={() => go('report')}>หน้ารายงาน</button></span></div>
-    {preview && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-3 sm:p-6" role="presentation" onClick={() => setPreview(null)}><div className="flex h-[min(92vh,980px)] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl" role="dialog" aria-modal="true" aria-label={`ตัวอย่าง${preview.title}`} onClick={event => event.stopPropagation()}><div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-3"><div><p className="text-[11px] font-semibold uppercase tracking-widest text-blue-700">Document preview</p><h2 className="text-base font-semibold text-slate-900">{preview.title}</h2></div><div className="flex items-center gap-2">{preview.ready && <button onClick={() => downloadDocument(preview.kind, 'pdf')} className="inline-flex items-center gap-2 rounded-lg bg-blue-900 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-800"><Download size={14} />PDF</button>}<button onClick={() => setPreview(null)} className="rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-100" aria-label="ปิดตัวอย่าง"><X size={18} /></button></div></div>{!preview.ready && <p className="border-b border-amber-200 bg-amber-50 px-5 py-2 text-xs text-amber-900">ดูแบบร่างได้ แต่ดาวน์โหลดแบบประเมินหลังพี่เลี้ยงส่งผลแล้ว</p>}<div className="min-h-0 flex-1 bg-slate-200 p-2 sm:p-5"><iframe key={preview.kind} title={`ตัวอย่าง${preview.title}`} src={`/api/preview/${preview.kind}`} sandbox="" className="h-full w-full rounded-lg border border-slate-300 bg-white" /></div></div></div>}
+    {preview && <div className="backdrop anim-fade fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6" role="presentation" onClick={() => setPreview(null)}><div className="anim-pop flex h-[min(92vh,980px)] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl" role="dialog" aria-modal="true" aria-label={`ตัวอย่าง${preview.title}`} onClick={event => event.stopPropagation()}><div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-3"><div><p className="text-[11px] font-semibold uppercase tracking-widest text-blue-700">Document preview</p><h2 className="text-base font-semibold text-slate-900">{preview.title}</h2></div><div className="flex items-center gap-2">{preview.ready && <button onClick={() => downloadDocument(preview.kind, 'pdf')} className="inline-flex items-center gap-2 rounded-lg bg-blue-900 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-800"><Download size={14} />PDF</button>}<button onClick={() => setPreview(null)} className="rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-100" aria-label="ปิดตัวอย่าง"><X size={18} /></button></div></div>{!preview.ready && <p className="border-b border-amber-200 bg-amber-50 px-5 py-2 text-xs text-amber-900">ดูแบบร่างได้ แต่ดาวน์โหลดแบบประเมินหลังพี่เลี้ยงส่งผลแล้ว</p>}<div className="min-h-0 flex-1 bg-slate-200 p-2 sm:p-5"><iframe key={preview.kind} title={`ตัวอย่าง${preview.title}`} src={`/api/preview/${preview.kind}`} sandbox="" className="h-full w-full rounded-lg border border-slate-300 bg-white" /></div></div></div>}
   </div>
 }
 
