@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Toaster, toast } from 'react-hot-toast'
-import { LayoutDashboard, UserRound, CalendarDays, BadgeCheck, ClipboardCheck, BookOpenText, Files, LogOut, ChevronRight, Plus, ArrowUpRight, Download, Clock3, CheckCircle2, FileText, FileUp, ImagePlus, Copy, ListChecks, Building2, Eye, X, CircleHelp, Sparkles, BellRing, TriangleAlert, ChevronLeft, Users, Search, RefreshCw } from 'lucide-react'
+import { LayoutDashboard, UserRound, CalendarDays, BadgeCheck, ClipboardCheck, BookOpenText, Files, LogOut, ChevronRight, Plus, ArrowUpRight, Download, Clock3, CheckCircle2, FileText, FileUp, ImagePlus, Copy, ListChecks, Building2, Eye, X, CircleHelp, Sparkles, BellRing, TriangleAlert, ChevronLeft, Users, Search, RefreshCw, KeyRound } from 'lucide-react'
 import { calculatePlan, missingLogDates } from './plan.js'
 import { provinces } from './provinces.js'
 import { validateProfile, validateInternship, validateLog, validateApproval } from './validation.js'
@@ -173,6 +173,39 @@ function missedDays(data) {
   return { missed: all.filter(d => d !== today), todayMissing: all.includes(today) }
 }
 
+// Profile picture with the first letter of the name as a fallback.
+function Avatar({ user, version = 0, className = 'avatar', title }) {
+  const [broken, setBroken] = useState(false)
+  useEffect(() => { setBroken(false) }, [user?.id, user?.has_photo, version])
+  const showPhoto = user?.has_photo && !broken
+  return <div className={`${className} overflow-hidden`} title={title}>{showPhoto ? <img src={`/api/profile/photo/${user.id}?v=${version}`} alt="" className="h-full w-full object-cover" onError={() => setBroken(true)} /> : (user?.name?.slice(0, 1) || '?')}</div>
+}
+
+function ChangePassword() {
+  const [form, setForm] = useState({ current: '', next: '', confirm: '' })
+  const [busy, setBusy] = useState(false)
+  const set = key => value => setForm(f => ({ ...f, [key]: value }))
+  async function submit(event) {
+    event.preventDefault()
+    if ([...form.next].length < 8) { toast.error('รหัสผ่านใหม่ต้องมีอย่างน้อย 8 ตัวอักษร'); return }
+    if (form.next !== form.confirm) { toast.error('ยืนยันรหัสผ่านใหม่ไม่ตรงกัน'); return }
+    setBusy(true)
+    try {
+      await post('/profile/password', { current: form.current, new: form.next }, 'PUT')
+      setForm({ current: '', next: '', confirm: '' })
+      toast.success('เปลี่ยนรหัสผ่านแล้ว อุปกรณ์อื่นจะถูกออกจากระบบ')
+    } catch (e) { toast.error(e.message) }
+    finally { setBusy(false) }
+  }
+  return <section className="card" aria-label="เปลี่ยนรหัสผ่าน">
+    <div className="section-head"><div><p className="eyebrow">ความปลอดภัย</p><h2>เปลี่ยนรหัสผ่าน</h2></div><KeyRound size={19} className="text-slate-500" aria-hidden="true" /></div>
+    <form onSubmit={submit}>
+      <div className="form-grid"><Field label="รหัสผ่านปัจจุบัน" type="password" value={form.current} onChange={set('current')} autoComplete="current-password" required /><Field label="รหัสผ่านใหม่" type="password" value={form.next} onChange={set('next')} autoComplete="new-password" minLength={8} required note="อย่างน้อย 8 ตัวอักษร" /><Field label="ยืนยันรหัสผ่านใหม่" type="password" value={form.confirm} onChange={set('confirm')} autoComplete="new-password" minLength={8} required /></div>
+      <Button className="primary" type="submit" busy={busy}>เปลี่ยนรหัสผ่าน</Button>
+    </form>
+  </section>
+}
+
 function Auth({ onAuth }) {
   const invite = location.pathname.startsWith('/invite/') ? location.pathname.split('/').pop() : ''
   const [mode, setMode] = useState(invite ? 'register' : 'login')
@@ -195,7 +228,7 @@ function Auth({ onAuth }) {
       <div className="auth-steps"><span>01&nbsp; บันทึกประจำวัน</span><span>02&nbsp; พี่เลี้ยงรับรอง</span><span>03&nbsp; ส่งออกเอกสาร</span></div>
     </div>
     <section className="auth-card"><p className="eyebrow">เริ่มต้นใช้งาน</p><h2>{invite ? 'ตอบรับคำเชิญ' : mode === 'login' ? 'เข้าสู่ระบบ' : 'สร้างบัญชีนักศึกษา'}</h2>{info && <p className="muted">ดูแลการฝึกงานของ {info.student} ที่ {info.company || 'สถานประกอบการ'}</p>}
-      <form onSubmit={submit}>{mode === 'register' && <Field label="ชื่อ–นามสกุล" value={name} onChange={setName} maxLength={150} required />}<Field label="อีเมล" type="email" value={email} onChange={setEmail} disabled={Boolean(invite && info)} required note={invite && info ? 'อีเมลนี้ผูกกับคำเชิญ' : ''} /><Field label="รหัสผ่าน" type="password" value={password} onChange={setPassword} minLength={mode === 'register' ? 10 : undefined} required note={mode === 'register' ? 'อย่างน้อย 10 ตัวอักษร' : ''} />{error && <p className="error">{error}</p>}<Button className="primary full" type="submit" busy={busy} disabled={Boolean(invite && !info)}>{mode === 'login' ? 'เข้าสู่ระบบ' : 'สร้างบัญชี'}</Button></form>
+      <form onSubmit={submit}>{mode === 'register' && <Field label="ชื่อ–นามสกุล" value={name} onChange={setName} maxLength={150} required />}<Field label="อีเมล" type="email" value={email} onChange={setEmail} disabled={Boolean(invite && info)} required note={invite && info ? 'อีเมลนี้ผูกกับคำเชิญ' : ''} /><Field label="รหัสผ่าน" type="password" value={password} onChange={setPassword} minLength={mode === 'register' ? 8 : undefined} required note={mode === 'register' ? 'อย่างน้อย 8 ตัวอักษร' : ''} />{error && <p className="error">{error}</p>}<Button className="primary full" type="submit" busy={busy} disabled={Boolean(invite && !info)}>{mode === 'login' ? 'เข้าสู่ระบบ' : 'สร้างบัญชี'}</Button></form>
       {!invite && <button className="text-button" onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError('') }}>{mode === 'login' ? 'ยังไม่มีบัญชี? สมัครเป็นนักศึกษา' : 'มีบัญชีแล้ว? เข้าสู่ระบบ'}</button>}
     </section>
   </main>
@@ -214,6 +247,7 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState('overview')
   const [touring, setTouring] = useState(false)
+  const [avatarVersion, setAvatarVersion] = useState(() => Date.now())
   const [collapsed, setCollapsed] = useState(() => { try { return localStorage.getItem('sidebar-collapsed') === '1' } catch { return false } })
   function toggleSidebar() {
     setCollapsed(v => { try { localStorage.setItem('sidebar-collapsed', v ? '0' : '1') } catch {}; return !v })
@@ -305,15 +339,15 @@ function App() {
     <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
       <div className="brand"><img className="brand-logo" src="/brand-mark.svg" alt="" /><strong>สมุดฝึกงาน</strong><button type="button" className="collapse-button" aria-label={collapsed ? 'ขยายเมนู' : 'ย่อเมนู'} title={collapsed ? 'ขยายเมนู' : 'ย่อเมนู'} onClick={toggleSidebar}><ChevronLeft size={16} aria-hidden="true" /></button></div>
       <nav aria-label="เมนูหลัก" data-tour="nav">{navGroups.map(([title, items]) => <div className="nav-group" key={title}><p className="nav-group-title">{title}</p>{items.map(([key, label, Icon]) => <button key={key} className={tab === key ? 'active' : ''} aria-current={tab === key ? 'page' : undefined} title={collapsed ? label : undefined} onClick={() => setTab(key)}><Icon size={18} strokeWidth={1.9} aria-hidden="true" /><span>{label}</span></button>)}</div>)}</nav>
-      <div className="sidebar-footer"><div className="avatar">{data.user.name?.slice(0, 1) || '?'}</div><div className="sidebar-user"><strong>{data.user.name}</strong><small>{student ? 'นักศึกษา' : 'พี่เลี้ยง'}</small></div><button aria-label="ออกจากระบบ" title="ออกจากระบบ" onClick={signout}><LogOut size={17} aria-hidden="true" /></button></div>
+      <div className="sidebar-footer"><Avatar user={data.user} version={avatarVersion} /><div className="sidebar-user"><strong>{data.user.name}</strong><small>{student ? 'นักศึกษา' : 'พี่เลี้ยง'}</small></div><button aria-label="ออกจากระบบ" title="ออกจากระบบ" onClick={signout}><LogOut size={17} aria-hidden="true" /></button></div>
       <p className="sidebar-copy">© 2026 สมุดฝึกงาน · มรภ.นครปฐม</p>
     </aside>
     <div className="main-shell">
       <header className="topbar">
         <div className="topbar-title"><nav className="breadcrumb" aria-label="เส้นทางการนำทาง"><button onClick={() => setTab('overview')}>สมุดฝึกงาน</button><ChevronRight size={13} aria-hidden="true" /><span aria-current="page">{headings[tab]}</span></nav><h1>{headings[tab]}</h1></div>
-        <div className="topbar-right">{student && <button type="button" data-tour="tour-button" className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-blue-900 hover:bg-slate-50" onClick={() => setTouring(true)}><CircleHelp size={15} aria-hidden="true" />คู่มือ</button>}<span className="pill"><Building2 size={14} aria-hidden="true" />{data.internship?.company || 'ยังไม่ระบุบริษัท'}</span><div className="avatar small" title={data.user.name}>{data.user.name?.slice(0, 1) || '?'}</div></div>
+        <div className="topbar-right">{student && <button type="button" data-tour="tour-button" className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-blue-900 hover:bg-slate-50" onClick={() => setTouring(true)}><CircleHelp size={15} aria-hidden="true" />คู่มือ</button>}<span className="pill"><Building2 size={14} aria-hidden="true" />{data.internship?.company || 'ยังไม่ระบุบริษัท'}</span><Avatar user={data.user} version={avatarVersion} className="avatar small" title={data.user.name} /></div>
       </header>
-      <main className="content">{tab === 'overview' && <Overview data={data} student={student} go={setTab} startLog={startLog} notify={notify} toggleNotify={toggleNotify} />}{tab === 'profile' && <Profile data={data} student={student} action={action} refresh={load} />}{tab === 'logs' && <Logs data={data} student={student} action={action} ai={ai} initialDate={logDate} onDateUsed={() => setLogDate('')} />}{tab === 'approvals' && <Approvals data={data} student={student} action={action} />}{tab === 'evaluation' && !student && <Evaluation data={data} student={student} action={action} />}{tab === 'report' && student && <Report data={data} student={student} action={action} ai={ai} />}{tab === 'documents' && student && <Documents data={data} student={student} go={setTab} />}{tab === 'admin' && data.user.is_admin && <AdminUsers me={data.user} />}</main>
+      <main className="content">{tab === 'overview' && <Overview data={data} student={student} go={setTab} startLog={startLog} notify={notify} toggleNotify={toggleNotify} />}{tab === 'profile' && <Profile data={data} student={student} action={action} refresh={load} avatarVersion={avatarVersion} onPhotoChanged={() => setAvatarVersion(Date.now())} />}{tab === 'logs' && <Logs data={data} student={student} action={action} ai={ai} initialDate={logDate} onDateUsed={() => setLogDate('')} />}{tab === 'approvals' && <Approvals data={data} student={student} action={action} />}{tab === 'evaluation' && !student && <Evaluation data={data} student={student} action={action} />}{tab === 'report' && student && <Report data={data} student={student} action={action} ai={ai} />}{tab === 'documents' && student && <Documents data={data} student={student} go={setTab} />}{tab === 'admin' && data.user.is_admin && <AdminUsers me={data.user} />}</main>
     </div>
     {touring && student && <Tour steps={studentTour} go={setTab} onClose={closeTour} />}
   </div>
@@ -480,11 +514,10 @@ function InvitePanel({ internship, invite, onCreate, canInvite }) {
   </>
 }
 
-function Profile({ data, student, action, refresh }) {
+function Profile({ data, student, action, refresh, avatarVersion, onPhotoChanged }) {
   const [user, setUser] = useState(data.user)
   const [internship, setInternship] = useState(data.internship || {})
   const [invite, setInvite] = useState('')
-  const [photoVersion, setPhotoVersion] = useState(Date.now())
   const dataRef = useRef(data)
   dataRef.current = data
   // Only sync fields the server controls; never overwrite what the user is typing.
@@ -505,7 +538,7 @@ function Profile({ data, student, action, refresh }) {
     const form = new FormData()
     form.append('photo', file)
     const ok = await action(() => request('/profile/photo', { method: 'POST', body: form }), 'อัปโหลดรูปแล้ว')
-    if (ok) setPhotoVersion(Date.now())
+    if (ok) onPhotoChanged?.()
   }
   async function makeInvite() {
     await action(async () => {
@@ -534,13 +567,14 @@ function Profile({ data, student, action, refresh }) {
   return <div className="stack">
     <section className="card" data-tour="profile-form">
       <div className="section-head"><div><p className="eyebrow">ข้อมูลสำหรับเอกสาร</p><h2>ข้อมูลส่วนตัว</h2></div><SaveStatus state={profileSave} /></div>
-      <div className="profile-row" data-tour="photo"><div className="profile-photo"><img src={`${data.user.photo_url}?v=${photoVersion}`} onError={e => e.currentTarget.style.display = 'none'} onLoad={e => e.currentTarget.style.display = 'block'} alt="รูปโปรไฟล์" /><span>{data.user.name?.slice(0, 1)}</span></div><label className="upload-button"><ImagePlus size={16} aria-hidden="true" />อัปโหลดรูป JPG หรือ PNG<input type="file" accept="image/png,image/jpeg" onChange={upload} hidden /></label><small>ไม่เกิน 2 MB</small></div>
+      <div className="profile-row" data-tour="photo"><div className="profile-photo"><img src={`${data.user.photo_url}?v=${avatarVersion}`} onError={e => e.currentTarget.style.display = 'none'} onLoad={e => e.currentTarget.style.display = 'block'} alt="รูปโปรไฟล์" /><span>{data.user.name?.slice(0, 1)}</span></div><label className="upload-button"><ImagePlus size={16} aria-hidden="true" />อัปโหลดรูป JPG หรือ PNG<input type="file" accept="image/png,image/jpeg" onChange={upload} hidden /></label><small>ไม่เกิน 2 MB</small></div>
       <form onSubmit={submitNow(profileSave)}>
         <div className="form-grid"><Field label="ชื่อ–นามสกุล" value={user.name} onChange={setUserField('name')} maxLength={150} required /><Field label="เบอร์โทรศัพท์" value={user.phone} onChange={setUserField('phone')} maxLength={40} /><Field label="ตำแหน่ง" value={user.position} onChange={setUserField('position')} maxLength={120} placeholder={student ? 'นักศึกษาฝึกงาน' : 'Software Engineer'} />{student && <Field label="วันเดือนปีเกิด" type="date" value={user.birth_date} onChange={setUserField('birth_date')} max={blankLog().date} />}</div>
         {student && <><div className="mb-4 mt-3 border-t border-slate-200 pt-5"><h3 className="text-base font-semibold text-blue-950">ที่อยู่และข้อมูลสำหรับหน้าประวัติ</h3><p className="mt-1 text-xs text-slate-500">ใช้ในแบบบันทึกและลงเวลาตามฟอร์มมหาวิทยาลัย</p></div><Field label="บ้านเลขที่ ถนน/ซอย" value={user.home_address} onChange={setUserField('home_address')} maxLength={300} /><div className="form-grid"><Field label="ตำบล/แขวง" value={user.subdistrict} onChange={setUserField('subdistrict')} maxLength={100} /><Field label="อำเภอ/เขต" value={user.district} onChange={setUserField('district')} maxLength={100} /><label className="field"><span>จังหวัด</span><select value={user.province || ''} onChange={event => setUser(x => ({ ...x, province: event.target.value, country: event.target.value === 'other' ? x.country : 'ประเทศไทย' }))}><option value="">เลือกจังหวัด</option>{provinces.map(name => <option key={name} value={name}>{name}</option>)}<option value="other">อื่น ๆ — ต่างประเทศ</option></select><small>มีครบ 77 จังหวัด รวมกรุงเทพมหานคร</small></label>{user.province === 'other' && <Field label="ชื่อประเทศ" value={user.country === 'ประเทศไทย' ? '' : user.country} onChange={setUserField('country')} maxLength={100} required placeholder="เช่น ญี่ปุ่น" />}</div><div className="form-grid"><TextArea label="ความรู้ความสามารถพิเศษ" value={user.skills} onChange={setUserField('skills')} rows={3} maxLength={1000} /><TextArea label="ความสนใจพิเศษ" value={user.interests} onChange={setUserField('interests')} rows={3} maxLength={1000} /></div></>}
       </form>
     </section>
     {student ? <section className="card" data-tour="internship-form"><div className="section-head"><div><p className="eyebrow">สถานประกอบการและช่วงฝึก</p><h2>ข้อมูลการฝึกงาน</h2></div><SaveStatus state={internshipSave} /></div><form onSubmit={submitNow(internshipSave)}><div className="form-grid"><Field label="มหาวิทยาลัย" value="มหาวิทยาลัยราชภัฏนครปฐม" disabled note="มหาวิทยาลัยกำหนดไว้แล้ว" /><Field label="คณะ" value={internship.faculty} onChange={set('faculty')} /><Field label="สาขาวิชา" value={internship.major} onChange={set('major')} /><Field label="รหัสนักศึกษา" value={internship.student_number} onChange={value => set('student_number')(value.replace(/\D/g, '').slice(0, 9))} maxLength={9} pattern="6642590[0-9]{2}" title="รหัสต้องเป็น 6642590xx" placeholder="6642590xx" required /><Field label="รหัสรุ่น" value="66" disabled /><Field label="หมู่เรียน" value={internship.class_group} onChange={set('class_group')} maxLength={40} /><Field label="ปีการศึกษา" value="2569" disabled /><Field label="ภาคเรียน" value="2" disabled /><Field label="บริษัท/หน่วยงาน" value={internship.company} onChange={set('company')} maxLength={200} /><Field label="แผนก" value={internship.department} onChange={set('department')} /><Field label="ตำแหน่งฝึกงาน" value={internship.position} onChange={set('position')} /><Field label="ที่อยู่บริษัท" value={internship.company_address} onChange={set('company_address')} maxLength={400} /><Field label="อีเมลพี่เลี้ยง" type="email" value={internship.mentor_email} onChange={set('mentor_email')} disabled={internship.mentor_linked} note={internship.mentor_linked ? 'เชื่อมบัญชีแล้ว จึงเปลี่ยนอีเมลไม่ได้' : 'บันทึกก่อนสร้างคำเชิญ'} /></div><PlanSetup internship={internship} setInternship={setInternship} set={set} actualHours={(data.logs || []).reduce((sum, log) => sum + log.hours, 0)} firstRecordedDate={firstRecordedDate} lastRecordedDate={lastRecordedDate} /></form><div data-tour="invite"><InvitePanel internship={internship} invite={invite} onCreate={makeInvite} canInvite={Boolean(internship.mentor_email && internship.mentor_email === data.internship?.mentor_email)} /></div></section> : <section className="card"><h2>การฝึกงานที่ดูแล</h2><p className="muted">นักศึกษา: {internship.student_name || '—'}</p><p><strong>{internship.company || 'ยังไม่ระบุบริษัท'}</strong></p><p className="muted">แผน: {internship.plan_type === 'cooperative' ? 'สหกิจศึกษา' : 'ฝึกงานทั่วไป'} · {calculatePlan(internship.start_date, internship.end_date, internship.plan_type, internship.holiday_dates)?.hours ?? '—'} ชั่วโมงตามแผน</p><p className="muted">นักศึกษาจะบันทึกข้อมูลหลัก คุณสามารถตรวจและรับรองบันทึกในเมนูการรับรอง</p></section>}
+    <ChangePassword />
   </div>
 }
 
@@ -697,6 +731,22 @@ function AdminUsers({ me }) {
   const [query, setQuery] = useState('')
   const [role, setRole] = useState('all')
   const [loading, setLoading] = useState(false)
+  const [confirmId, setConfirmId] = useState(null)
+  const [resetting, setResetting] = useState(null)
+  const [resetResult, setResetResult] = useState(null)
+  async function resetPassword(row) {
+    setResetting(row.id)
+    try {
+      const v = await post(`/admin/users/${row.id}/reset-password`, {})
+      setResetResult({ name: row.name, email: v.email, password: v.password })
+      setConfirmId(null)
+      toast.success('รีเซ็ตรหัสผ่านแล้ว')
+    } catch (e) { toast.error(e.message) }
+    finally { setResetting(null) }
+  }
+  async function copyReset() {
+    try { await navigator.clipboard.writeText(`อีเมล: ${resetResult.email}\nรหัสผ่านชั่วคราว: ${resetResult.password}\nเข้าสู่ระบบแล้วเปลี่ยนรหัสผ่านที่หน้าข้อมูลส่วนตัว`); toast.success('คัดลอกแล้ว') } catch { toast.error('คัดลอกไม่สำเร็จ') }
+  }
   async function load() {
     setLoading(true)
     try { const v = await request('/admin/users'); setRows(v.users); setError('') }
@@ -723,22 +773,29 @@ function AdminUsers({ me }) {
         <label className="relative min-w-[220px] flex-1"><Search size={15} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-slate-400" aria-hidden="true" /><input className="w-full rounded-lg border border-slate-300 py-2 pr-3 pl-9 text-sm" placeholder="ค้นหาชื่อ อีเมล หรือบริษัท" value={query} onChange={e => setQuery(e.target.value)} aria-label="ค้นหาผู้ใช้" /></label>
         <div className="segmented">{[['all', 'ทั้งหมด'], ['student', 'นักศึกษา'], ['mentor', 'พี่เลี้ยง']].map(([key, label]) => <button key={key} type="button" className={role === key ? 'selected' : ''} onClick={() => setRole(key)}>{label}</button>)}</div>
       </div>
+      {resetResult && <div className="mb-4 flex flex-col gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 sm:flex-row sm:items-center sm:justify-between" role="status">
+        <div><strong className="block">รหัสผ่านชั่วคราวของ {resetResult.name || resetResult.email}</strong><span className="text-xs">ส่งให้เจ้าของบัญชี แล้วให้เปลี่ยนรหัสผ่านเองหลังเข้าสู่ระบบ · ข้อความนี้จะแสดงครั้งเดียว</span><div className="mt-1.5 font-mono text-base font-semibold tracking-wider" data-testid="temp-password">{resetResult.password}</div></div>
+        <div className="flex shrink-0 gap-2"><button type="button" className="inline-flex items-center gap-1.5 rounded-md bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white" onClick={copyReset}><Copy size={13} aria-hidden="true" />คัดลอก</button><button type="button" className="rounded-md border border-emerald-300 bg-white px-3 py-1.5 text-xs font-semibold" onClick={() => setResetResult(null)}>ปิด</button></div>
+      </div>}
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[860px] text-left text-sm">
-          <thead><tr className="border-b border-slate-200 text-[11px] font-semibold tracking-wider text-slate-500 uppercase"><th className="py-2 pr-3">ผู้ใช้</th><th className="py-2 pr-3">บทบาท</th><th className="py-2 pr-3">บริษัท / การเชื่อมโยง</th><th className="py-2 pr-3 text-right">บันทึก</th><th className="py-2 pr-3">บันทึกล่าสุด</th><th className="py-2 pr-3">สมัครเมื่อ</th><th className="py-2">เข้าใช้ล่าสุด</th></tr></thead>
+        <table className="w-full min-w-[960px] text-left text-sm">
+          <thead><tr className="border-b border-slate-200 text-[11px] font-semibold tracking-wider text-slate-500 uppercase"><th className="py-2 pr-3">ผู้ใช้</th><th className="py-2 pr-3">บทบาท</th><th className="py-2 pr-3">บริษัท / การเชื่อมโยง</th><th className="py-2 pr-3 text-right">บันทึก</th><th className="py-2 pr-3">บันทึกล่าสุด</th><th className="py-2 pr-3">สมัครเมื่อ</th><th className="py-2 pr-3">เข้าใช้ล่าสุด</th><th className="py-2 text-right">จัดการ</th></tr></thead>
           <tbody>{shown.map(r => <tr key={r.id} className="border-b border-slate-100 align-top">
-            <td className="py-3 pr-3"><div className="font-semibold text-slate-900">{r.name || '—'}{r.id === me.id && <span className="ml-1.5 text-[11px] font-normal text-slate-400">(คุณ)</span>}</div><div className="text-xs text-slate-500">{r.email}</div></td>
+            <td className="py-3 pr-3"><div className="flex items-center gap-2.5"><Avatar user={r} className="avatar" /><div><div className="font-semibold text-slate-900">{r.name || '—'}{r.id === me.id && <span className="ml-1.5 text-[11px] font-normal text-slate-400">(คุณ)</span>}</div><div className="text-xs text-slate-500">{r.email}</div></div></div></td>
             <td className="py-3 pr-3"><span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${r.role === 'student' ? 'bg-blue-50 text-blue-800' : 'bg-emerald-50 text-emerald-800'}`}>{r.role === 'student' ? 'นักศึกษา' : 'พี่เลี้ยง'}</span>{r.is_admin && <span className="ml-1 rounded-full bg-slate-800 px-2 py-0.5 text-[11px] font-semibold text-white">admin</span>}</td>
             <td className="py-3 pr-3 text-xs text-slate-600"><div className="font-medium text-slate-800">{r.company || '—'}</div>{r.role === 'student' ? <div>พี่เลี้ยง: {r.mentor_name || 'ยังไม่เชื่อม'}</div> : <div>ดูแล {r.mentees} คน{r.student_name ? ` · ${r.student_name}` : ''}</div>}</td>
             <td className="py-3 pr-3 text-right">{r.role === 'student' ? <><div className="font-semibold">{r.log_count}</div><div className="text-[11px] text-slate-500">รับรอง {r.approved}</div></> : '—'}</td>
             <td className="py-3 pr-3 text-xs">{r.last_log_date ? thaiShortDate(r.last_log_date) : '—'}</td>
             <td className="py-3 pr-3 text-xs text-slate-600">{thaiDateTime(r.created_at)}</td>
-            <td className="py-3 text-xs"><div className="flex items-center gap-1.5">{r.active_session && <span className="h-2 w-2 rounded-full bg-emerald-500" title="มี session ที่ยังไม่หมดอายุ" />}<span title={thaiDateTime(r.last_login_at)}>{timeAgo(r.last_login_at)}</span></div></td>
+            <td className="py-3 pr-3 text-xs"><div className="flex items-center gap-1.5">{r.active_session && <span className="h-2 w-2 rounded-full bg-emerald-500" title="มี session ที่ยังไม่หมดอายุ" />}<span title={thaiDateTime(r.last_login_at)}>{timeAgo(r.last_login_at)}</span></div></td>
+            <td className="py-3 text-right text-xs">{r.id === me.id ? <span className="text-slate-400">—</span> : confirmId === r.id
+              ? <div className="inline-flex items-center gap-1.5"><span className="text-slate-600">รีเซ็ต?</span><button type="button" className="rounded-md bg-red-600 px-2.5 py-1 font-semibold text-white disabled:opacity-50" disabled={resetting === r.id} onClick={() => resetPassword(r)}>{resetting === r.id ? 'กำลังทำ…' : 'ยืนยัน'}</button><button type="button" className="rounded-md border border-slate-300 bg-white px-2.5 py-1 font-semibold" onClick={() => setConfirmId(null)}>ยกเลิก</button></div>
+              : <button type="button" className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 font-semibold text-slate-700 hover:bg-slate-50" onClick={() => setConfirmId(r.id)}><KeyRound size={12} aria-hidden="true" />รีเซ็ตรหัสผ่าน</button>}</td>
           </tr>)}</tbody>
         </table>
         {!shown.length && <p className="empty py-6 text-center">ไม่พบผู้ใช้ที่ตรงกับเงื่อนไข</p>}
       </div>
-      <p className="mt-4 text-[11px] text-slate-400">แสดงเฉพาะข้อมูลสรุปการใช้งาน ไม่แสดงรหัสผ่านหรือเนื้อหาบันทึก · วันสมัคร/เข้าใช้ล่าสุดเริ่มเก็บตั้งแต่อัปเดตนี้ บัญชีเก่าจะขึ้นเมื่อ login ครั้งถัดไป</p>
+      <p className="mt-4 text-[11px] text-slate-400">แสดงเฉพาะข้อมูลสรุปการใช้งาน ไม่แสดงรหัสผ่านหรือเนื้อหาบันทึก · รีเซ็ตรหัสผ่านแล้วผู้ใช้จะถูกออกจากระบบทุกอุปกรณ์ · วันสมัคร/เข้าใช้ล่าสุดเริ่มเก็บตั้งแต่อัปเดตนี้ บัญชีเก่าจะขึ้นเมื่อ login ครั้งถัดไป</p>
     </section>
   </div>
 }
