@@ -76,6 +76,72 @@ function TextArea({ label, value, onChange, rows = 4, placeholder = '', readOnly
 
 function Button({ children, busy, ...props }) { return <button {...props} disabled={busy || props.disabled}>{busy ? 'กำลังบันทึก…' : children}</button> }
 
+// Debounced autosave: saves `value` after the user stops typing, skips invalid
+// drafts, never overlaps requests, and flushes pending edits on unmount.
+function useAutosave(value, { save, validate, delay = 1000 }) {
+  const serialized = JSON.stringify(value)
+  const savedRef = useRef(serialized)
+  const latest = useRef({ value, save, validate })
+  latest.current = { value, save, validate }
+  const timer = useRef(null)
+  const running = useRef(false)
+  const [state, setState] = useState({ status: 'saved', message: '' })
+  const flushRef = useRef(null)
+  flushRef.current = async () => {
+    clearTimeout(timer.current)
+    timer.current = null
+    const current = latest.current
+    const snapshot = JSON.stringify(current.value)
+    if (snapshot === savedRef.current) { setState({ status: 'saved', message: '' }); return }
+    const error = current.validate?.(current.value)
+    if (error) { setState({ status: 'invalid', message: error }); return }
+    if (running.current) { timer.current = setTimeout(() => flushRef.current(), 300); return }
+    running.current = true
+    setState({ status: 'saving', message: '' })
+    try {
+      await current.save(JSON.parse(snapshot))
+      savedRef.current = snapshot
+      const changedSince = JSON.stringify(latest.current.value) !== snapshot
+      setState({ status: changedSince ? 'pending' : 'saved', message: '' })
+      if (changedSince) timer.current = setTimeout(() => flushRef.current(), delay)
+    } catch (e) {
+      setState({ status: 'error', message: e.message })
+    } finally {
+      running.current = false
+    }
+  }
+  useEffect(() => {
+    if (serialized === savedRef.current) return
+    setState({ status: 'pending', message: '' })
+    clearTimeout(timer.current)
+    timer.current = setTimeout(() => flushRef.current(), delay)
+  }, [serialized])
+  useEffect(() => {
+    const warn = event => { if (JSON.stringify(latest.current.value) !== savedRef.current) { event.preventDefault(); event.returnValue = '' } }
+    window.addEventListener('beforeunload', warn)
+    return () => {
+      window.removeEventListener('beforeunload', warn)
+      if (timer.current) flushRef.current()
+    }
+  }, [])
+  return { ...state, flush: () => flushRef.current() }
+}
+
+function SaveStatus({ state }) {
+  const view = {
+    saved: ['text-slate-500', 'บันทึกอัตโนมัติแล้ว'],
+    pending: ['text-slate-500', 'มีการแก้ไข…'],
+    saving: ['text-blue-700', 'กำลังบันทึก…'],
+    invalid: ['text-amber-700', 'ยังไม่บันทึก: ' + state.message],
+    error: ['text-red-700', 'บันทึกไม่สำเร็จ: ' + state.message],
+  }[state.status]
+  return <div className={`flex items-center gap-2 text-xs font-medium ${view[0]}`} role="status" aria-live="polite">
+    {state.status === 'saved' && <CheckCircle2 size={14} aria-hidden="true" />}
+    <span>{view[1]}</span>
+    {state.status === 'error' && <button type="button" className="underline" onClick={state.flush}>ลองอีกครั้ง</button>}
+  </div>
+}
+
 function Auth({ onAuth }) {
   const invite = location.pathname.startsWith('/invite/') ? location.pathname.split('/').pop() : ''
   const [mode, setMode] = useState(invite ? 'register' : 'login')
@@ -153,7 +219,7 @@ function App() {
         <div className="topbar-title"><nav className="breadcrumb" aria-label="เส้นทางการนำทาง"><button onClick={() => setTab('overview')}>สมุดฝึกงาน</button><ChevronRight size={13} aria-hidden="true" /><span aria-current="page">{headings[tab]}</span></nav><h1>{headings[tab]}</h1></div>
         <div className="topbar-right"><span className="pill"><Building2 size={14} aria-hidden="true" />{data.internship?.company || 'ยังไม่ระบุบริษัท'}</span><div className="avatar small" title={data.user.name}>{data.user.name?.slice(0, 1) || '?'}</div></div>
       </header>
-      <main className="content">{tab === 'overview' && <Overview data={data} student={student} go={setTab} />}{tab === 'profile' && <Profile data={data} student={student} action={action} />}{tab === 'logs' && <Logs data={data} student={student} action={action} />}{tab === 'approvals' && <Approvals data={data} student={student} action={action} />}{tab === 'evaluation' && !student && <Evaluation data={data} student={student} action={action} />}{tab === 'report' && student && <Report data={data} student={student} action={action} />}{tab === 'documents' && student && <Documents data={data} student={student} go={setTab} />}</main>
+      <main className="content">{tab === 'overview' && <Overview data={data} student={student} go={setTab} />}{tab === 'profile' && <Profile data={data} student={student} action={action} refresh={load} />}{tab === 'logs' && <Logs data={data} student={student} action={action} />}{tab === 'approvals' && <Approvals data={data} student={student} action={action} />}{tab === 'evaluation' && !student && <Evaluation data={data} student={student} action={action} />}{tab === 'report' && student && <Report data={data} student={student} action={action} />}{tab === 'documents' && student && <Documents data={data} student={student} go={setTab} />}</main>
     </div>
   </div>
 }
@@ -209,12 +275,15 @@ function InvitePanel({ internship, invite, onCreate, canInvite }) {
   </>
 }
 
-function Profile({ data, student, action }) {
+function Profile({ data, student, action, refresh }) {
   const [user, setUser] = useState(data.user)
   const [internship, setInternship] = useState(data.internship || {})
   const [invite, setInvite] = useState('')
   const [photoVersion, setPhotoVersion] = useState(Date.now())
-  useEffect(() => { setUser(data.user); setInternship(data.internship || {}) }, [data.user, data.internship])
+  const dataRef = useRef(data)
+  dataRef.current = data
+  // Only sync fields the server controls; never overwrite what the user is typing.
+  useEffect(() => { setInternship(x => ({ ...x, mentor_linked: data.internship?.mentor_linked, student_name: data.internship?.student_name })) }, [data.internship?.mentor_linked, data.internship?.student_name])
   const set = key => value => setInternship(x => ({ ...x, [key]: value }))
   const setUserField = key => value => setUser(x => ({ ...x, [key]: value }))
   const recordedDates = (data.logs || []).map(log => log.date)
@@ -239,32 +308,34 @@ function Profile({ data, student, action }) {
       setInvite(location.origin + value.invite_url)
     }, 'สร้างลิงก์คำเชิญแล้ว ส่งให้พี่เลี้ยงด้วยช่องทางที่คุณเลือก')
   }
-  async function saveInternship(event) {
-    event.preventDefault()
-    if (data.internship?.mentor_linked && internship.mentor_email !== data.internship.mentor_email) { toast.error('อีเมลพี่เลี้ยงที่เชื่อมแล้วแก้ไขไม่ได้'); return }
-    const error = validateInternship(internship, data.logs || [])
-    if (error) { toast.error(error); return }
-    const previousMentorEmail = data.internship?.mentor_email || ''
-    const saved = await action(() => post('/internship', { ...internship, university: 'มหาวิทยาลัยราชภัฏนครปฐม', year: '2569', term: '2' }, 'PUT'), 'บันทึกข้อมูลการฝึกงานแล้ว')
-    if (saved && previousMentorEmail !== internship.mentor_email) setInvite('')
-  }
-  function saveProfile(event) {
-    event.preventDefault()
-    const error = validateProfile(user, student, provinces, blankLog().date)
-    if (error) { toast.error(error); return }
-    action(() => post('/profile', user, 'PUT'), 'บันทึกข้อมูลส่วนตัวแล้ว')
-  }
+  const internshipSave = useAutosave(internship, {
+    validate: value => {
+      const current = dataRef.current.internship
+      if (current?.mentor_linked && value.mentor_email !== current.mentor_email) return 'อีเมลพี่เลี้ยงที่เชื่อมแล้วแก้ไขไม่ได้'
+      return validateInternship(value, dataRef.current.logs || [])
+    },
+    save: async value => {
+      const previousMentorEmail = dataRef.current.internship?.mentor_email || ''
+      await post('/internship', { ...value, university: 'มหาวิทยาลัยราชภัฏนครปฐม', year: '2569', term: '2' }, 'PUT')
+      if (previousMentorEmail !== value.mentor_email) setInvite('')
+      refresh()
+    },
+  })
+  const profileSave = useAutosave(user, {
+    validate: value => validateProfile(value, student, provinces, blankLog().date),
+    save: async value => { await post('/profile', value, 'PUT'); refresh() },
+  })
+  const submitNow = save => event => { event.preventDefault(); save.flush() }
   return <div className="stack">
     <section className="card">
-      <div className="section-head"><div><p className="eyebrow">ข้อมูลสำหรับเอกสาร</p><h2>ข้อมูลส่วนตัว</h2></div></div>
+      <div className="section-head"><div><p className="eyebrow">ข้อมูลสำหรับเอกสาร</p><h2>ข้อมูลส่วนตัว</h2></div><SaveStatus state={profileSave} /></div>
       <div className="profile-row"><div className="profile-photo"><img src={`${data.user.photo_url}?v=${photoVersion}`} onError={e => e.currentTarget.style.display = 'none'} onLoad={e => e.currentTarget.style.display = 'block'} alt="รูปโปรไฟล์" /><span>{data.user.name?.slice(0, 1)}</span></div><label className="upload-button"><ImagePlus size={16} aria-hidden="true" />อัปโหลดรูป JPG หรือ PNG<input type="file" accept="image/png,image/jpeg" onChange={upload} hidden /></label><small>ไม่เกิน 2 MB</small></div>
-      <form onSubmit={saveProfile}>
+      <form onSubmit={submitNow(profileSave)}>
         <div className="form-grid"><Field label="ชื่อ–นามสกุล" value={user.name} onChange={setUserField('name')} maxLength={150} required /><Field label="เบอร์โทรศัพท์" value={user.phone} onChange={setUserField('phone')} maxLength={40} /><Field label="ตำแหน่ง" value={user.position} onChange={setUserField('position')} maxLength={120} placeholder={student ? 'นักศึกษาฝึกงาน' : 'Software Engineer'} />{student && <Field label="วันเดือนปีเกิด" type="date" value={user.birth_date} onChange={setUserField('birth_date')} max={blankLog().date} />}</div>
         {student && <><div className="mb-4 mt-3 border-t border-slate-200 pt-5"><h3 className="text-base font-semibold text-blue-950">ที่อยู่และข้อมูลสำหรับหน้าประวัติ</h3><p className="mt-1 text-xs text-slate-500">ใช้ในแบบบันทึกและลงเวลาตามฟอร์มมหาวิทยาลัย</p></div><Field label="บ้านเลขที่ ถนน/ซอย" value={user.home_address} onChange={setUserField('home_address')} maxLength={300} /><div className="form-grid"><Field label="ตำบล/แขวง" value={user.subdistrict} onChange={setUserField('subdistrict')} maxLength={100} /><Field label="อำเภอ/เขต" value={user.district} onChange={setUserField('district')} maxLength={100} /><label className="field"><span>จังหวัด</span><select value={user.province || ''} onChange={event => setUser(x => ({ ...x, province: event.target.value, country: event.target.value === 'other' ? x.country : 'ประเทศไทย' }))}><option value="">เลือกจังหวัด</option>{provinces.map(name => <option key={name} value={name}>{name}</option>)}<option value="other">อื่น ๆ — ต่างประเทศ</option></select><small>มีครบ 77 จังหวัด รวมกรุงเทพมหานคร</small></label>{user.province === 'other' && <Field label="ชื่อประเทศ" value={user.country === 'ประเทศไทย' ? '' : user.country} onChange={setUserField('country')} maxLength={100} required placeholder="เช่น ญี่ปุ่น" />}</div><div className="form-grid"><TextArea label="ความรู้ความสามารถพิเศษ" value={user.skills} onChange={setUserField('skills')} rows={3} maxLength={1000} /><TextArea label="ความสนใจพิเศษ" value={user.interests} onChange={setUserField('interests')} rows={3} maxLength={1000} /></div></>}
-        <button className="primary">บันทึกข้อมูลส่วนตัว</button>
       </form>
     </section>
-    {student ? <section className="card"><div className="section-head"><div><p className="eyebrow">สถานประกอบการและช่วงฝึก</p><h2>ข้อมูลการฝึกงาน</h2></div></div><form onSubmit={saveInternship}><div className="form-grid"><Field label="มหาวิทยาลัย" value="มหาวิทยาลัยราชภัฏนครปฐม" disabled note="มหาวิทยาลัยกำหนดไว้แล้ว" /><Field label="คณะ" value={internship.faculty} onChange={set('faculty')} /><Field label="สาขาวิชา" value={internship.major} onChange={set('major')} /><Field label="รหัสนักศึกษา" value={internship.student_number} onChange={value => set('student_number')(value.replace(/\D/g, '').slice(0, 9))} maxLength={9} pattern="6642590[0-9]{2}" title="รหัสต้องเป็น 6642590xx" placeholder="6642590xx" required /><Field label="รหัสรุ่น" value="66" disabled /><Field label="หมู่เรียน" value={internship.class_group} onChange={set('class_group')} maxLength={40} /><Field label="ปีการศึกษา" value="2569" disabled /><Field label="ภาคเรียน" value="2" disabled /><Field label="บริษัท/หน่วยงาน" value={internship.company} onChange={set('company')} maxLength={200} /><Field label="แผนก" value={internship.department} onChange={set('department')} /><Field label="ตำแหน่งฝึกงาน" value={internship.position} onChange={set('position')} /><Field label="ที่อยู่บริษัท" value={internship.company_address} onChange={set('company_address')} maxLength={400} /><Field label="อีเมลพี่เลี้ยง" type="email" value={internship.mentor_email} onChange={set('mentor_email')} disabled={internship.mentor_linked} note={internship.mentor_linked ? 'เชื่อมบัญชีแล้ว จึงเปลี่ยนอีเมลไม่ได้' : 'บันทึกก่อนสร้างคำเชิญ'} /></div><PlanSetup internship={internship} setInternship={setInternship} set={set} actualHours={(data.logs || []).reduce((sum, log) => sum + log.hours, 0)} firstRecordedDate={firstRecordedDate} lastRecordedDate={lastRecordedDate} /><button className="primary">บันทึกข้อมูลการฝึกงาน</button></form><InvitePanel internship={internship} invite={invite} onCreate={makeInvite} canInvite={Boolean(internship.mentor_email && internship.mentor_email === data.internship?.mentor_email)} /></section> : <section className="card"><h2>การฝึกงานที่ดูแล</h2><p className="muted">นักศึกษา: {internship.student_name || '—'}</p><p><strong>{internship.company || 'ยังไม่ระบุบริษัท'}</strong></p><p className="muted">แผน: {internship.plan_type === 'cooperative' ? 'สหกิจศึกษา' : 'ฝึกงานทั่วไป'} · {calculatePlan(internship.start_date, internship.end_date, internship.plan_type, internship.holiday_dates)?.hours ?? '—'} ชั่วโมงตามแผน</p><p className="muted">นักศึกษาจะบันทึกข้อมูลหลัก คุณสามารถตรวจและรับรองบันทึกในเมนูการรับรอง</p></section>}
+    {student ? <section className="card"><div className="section-head"><div><p className="eyebrow">สถานประกอบการและช่วงฝึก</p><h2>ข้อมูลการฝึกงาน</h2></div><SaveStatus state={internshipSave} /></div><form onSubmit={submitNow(internshipSave)}><div className="form-grid"><Field label="มหาวิทยาลัย" value="มหาวิทยาลัยราชภัฏนครปฐม" disabled note="มหาวิทยาลัยกำหนดไว้แล้ว" /><Field label="คณะ" value={internship.faculty} onChange={set('faculty')} /><Field label="สาขาวิชา" value={internship.major} onChange={set('major')} /><Field label="รหัสนักศึกษา" value={internship.student_number} onChange={value => set('student_number')(value.replace(/\D/g, '').slice(0, 9))} maxLength={9} pattern="6642590[0-9]{2}" title="รหัสต้องเป็น 6642590xx" placeholder="6642590xx" required /><Field label="รหัสรุ่น" value="66" disabled /><Field label="หมู่เรียน" value={internship.class_group} onChange={set('class_group')} maxLength={40} /><Field label="ปีการศึกษา" value="2569" disabled /><Field label="ภาคเรียน" value="2" disabled /><Field label="บริษัท/หน่วยงาน" value={internship.company} onChange={set('company')} maxLength={200} /><Field label="แผนก" value={internship.department} onChange={set('department')} /><Field label="ตำแหน่งฝึกงาน" value={internship.position} onChange={set('position')} /><Field label="ที่อยู่บริษัท" value={internship.company_address} onChange={set('company_address')} maxLength={400} /><Field label="อีเมลพี่เลี้ยง" type="email" value={internship.mentor_email} onChange={set('mentor_email')} disabled={internship.mentor_linked} note={internship.mentor_linked ? 'เชื่อมบัญชีแล้ว จึงเปลี่ยนอีเมลไม่ได้' : 'บันทึกก่อนสร้างคำเชิญ'} /></div><PlanSetup internship={internship} setInternship={setInternship} set={set} actualHours={(data.logs || []).reduce((sum, log) => sum + log.hours, 0)} firstRecordedDate={firstRecordedDate} lastRecordedDate={lastRecordedDate} /></form><InvitePanel internship={internship} invite={invite} onCreate={makeInvite} canInvite={Boolean(internship.mentor_email && internship.mentor_email === data.internship?.mentor_email)} /></section> : <section className="card"><h2>การฝึกงานที่ดูแล</h2><p className="muted">นักศึกษา: {internship.student_name || '—'}</p><p><strong>{internship.company || 'ยังไม่ระบุบริษัท'}</strong></p><p className="muted">แผน: {internship.plan_type === 'cooperative' ? 'สหกิจศึกษา' : 'ฝึกงานทั่วไป'} · {calculatePlan(internship.start_date, internship.end_date, internship.plan_type, internship.holiday_dates)?.hours ?? '—'} ชั่วโมงตามแผน</p><p className="muted">นักศึกษาจะบันทึกข้อมูลหลัก คุณสามารถตรวจและรับรองบันทึกในเมนูการรับรอง</p></section>}
   </div>
 }
 
